@@ -17,5 +17,6 @@ include("helpers/LibOpenCRG.jl")
     # Cross-validation against the upstream C reference implementation
     # (OpenCRG_jll), through a small ccall wrapper kept in test/helpers.
     include("test_oracle_mods.jl")
+    include("test_oracle_scale_anchors.jl")
     include("test_crossvalidate.jl")
 end

@@ -403,6 +403,13 @@ downstream reachability — cross-validated directly against the compiled C
 oracle's own post-scale `crgDataSetGetURange` output (not just hand
 arithmetic) in `test_transform.jl`'s `"SCALE_LENGTH"` regression test.
 
+**Scaling invalidates end anchors**, as in `crgDataSetModifiersApply`:
+`SCALE_LENGTH` and `SCALE_CURVATURE` drop `end_x`/`end_y` (set to `nothing`),
+`SCALE_LENGTH` and `SCALE_SLOPE` drop `end_z`, and `SCALE_BANKING` drops
+`end_banking`. Otherwise the scaled reference line would be integrated
+backward to a now-meaningless endpoint. Cross-validated in
+`test_oracle_scale_anchors.jl`.
+
 Deliberately NOT touched by any other `SCALE_*` here: `v` only moves under
 `SCALE_WIDTH`, and only by a uniform multiplicative factor — this preserves
 (assuming a positive scale factor, the only physically sensible one for a
@@ -430,29 +437,37 @@ function apply_mods(data::CRGData)
     v = copy(data.v)
     u_increment, start_slope, end_slope, start_banking, end_banking =
         r.increment, r.start_slope, r.end_slope, r.start_banking, r.end_banking
+    # Endpoint anchors; crgDataSetModifiersApply invalidates the ones a scale
+    # modifier makes obsolete (see the scaling blocks below).
+    end_x, end_y, end_z = r.end_x, r.end_y, r.end_z
 
     mods.scale_z_grid === nothing || (z .*= mods.scale_z_grid)
     if mods.scale_slope !== nothing
         slope === nothing || (slope .*= mods.scale_slope)
         start_slope *= mods.scale_slope
         end_slope = end_slope === nothing ? nothing : end_slope * mods.scale_slope
+        end_z = nothing  # crgMgr.c clears dCrgDataDefZEnd
     end
     if mods.scale_banking !== nothing
         banking === nothing || (banking .*= mods.scale_banking)
         start_banking *= mods.scale_banking
-        end_banking = end_banking === nothing ? nothing : end_banking * mods.scale_banking
+        end_banking = nothing  # crgMgr.c clears dCrgDataDefBankEnd
     end
-    mods.scale_length === nothing || (u_increment *= mods.scale_length)
+    if mods.scale_length !== nothing
+        u_increment *= mods.scale_length
+        end_x = end_y = end_z = nothing  # crgMgr.c clears dCrgDataDefX/Y/ZEnd
+    end
     mods.scale_width === nothing || (v .*= mods.scale_width)
     if mods.scale_curvature !== nothing
         base = phi[1]
         for i in 2:length(phi)
             phi[i] = base + mods.scale_curvature * (phi[i] - base)
         end
+        end_x = end_y = nothing  # crgMgr.c clears dCrgDataDefX/YEnd
     end
 
     r2 = ReferenceLineParams(r.start_u, r.end_u, u_increment, r.start_x, r.start_y, r.start_phi,
-        r.end_x, r.end_y, r.end_phi, r.start_z, r.end_z, r.v_right, r.v_left, r.v_increment,
+        end_x, end_y, r.end_phi, r.start_z, end_z, r.v_right, r.v_left, r.v_increment,
         start_slope, end_slope, start_banking, end_banking)
 
     # SCALE_LENGTH: end_u must rescale proportionally about start_u (matching

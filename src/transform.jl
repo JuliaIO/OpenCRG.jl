@@ -1,4 +1,3 @@
-# lib/OpenCRG/src/transform.jl
 
 """
     integrate_reference_line(refline, phi) -> (x, y)
@@ -338,7 +337,7 @@ any of the `dCrgModRefPoint{X,Y,Z,Phi,U,UFrac,V,VFrac}` checks, and the
 whole `REFLINE_OFFSET_*`/`REFLINE_ROTCENTER_*` block is gated behind
 `if (!applyXform)` — i.e. it runs at all only when NONE of those
 `REFPOINT_*` fields were present. Confirmed directly against that source
-(`lib/LibOpenCRG/csrc/src/crgMgr.c`, `crgDataApplyTransformations`,
+(`crgMgr.c` (asam-ev/OpenCRG), `crgDataApplyTransformations`,
 ~lines 804-922) rather than assumed.
 
 **Scope boundary, narrowed during the Tasks 16+17 review (read before

@@ -1,4 +1,3 @@
-# lib/OpenCRG/test/test_read.jl
 @testset "read_crg" begin
     @testset "small ASCII file end-to-end" begin
         data = OpenCRG.read_crg(joinpath(DATA, "handmade_curved_minimalist.crg"))

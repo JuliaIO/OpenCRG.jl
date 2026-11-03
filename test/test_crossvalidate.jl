@@ -1,5 +1,4 @@
-# lib/OpenCRG/test/test_crossvalidate.jl
-using LibOpenCRG
+using .LibOpenCRG
 
 """
     crossvalidate_grid(path; label=path) -> Int

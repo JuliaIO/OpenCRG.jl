@@ -1,4 +1,3 @@
-# lib/OpenCRG/src/read.jl
 
 """
 A fully parsed OpenCRG file: header metadata plus raw channels. No

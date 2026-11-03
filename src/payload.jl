@@ -1,4 +1,3 @@
-# lib/OpenCRG/src/payload.jl
 
 const ASCII_FIELD_WIDTH = Dict(:LRFI => 10, :LDFI => 20)
 const FIELDS_PER_RECORD = Dict(:LRFI => 8, :LDFI => 4, :KRBI => 20, :KDBI => 10)

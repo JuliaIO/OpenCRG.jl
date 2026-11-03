@@ -1,4 +1,3 @@
-# lib/OpenCRG/src/header.jl
 
 """
     find_header_end(bytes) -> Int

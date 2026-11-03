@@ -7,8 +7,9 @@ Wrapper around the upstream ASAM OpenCRG C reference library (via
 functions the C library provides and the pure-Julia package does not
 (`uv2xy`, `xy2uv`, `uv2z`, `xy2z`, `uv2pk`, `xy2pk`).
 
-Native resources are released automatically by finalizers, or
-deterministically with [`close`](@ref) or the do-block form of [`read_crg`](@ref).
+Native resources are released automatically by finalizers (which never block:
+if the library is busy on another thread the release is retried at a later GC),
+or deterministically with [`close`](@ref) or the do-block form of [`read_crg`](@ref).
 
 The raw `ccall` layer is available as the submodule [`LibOpenCRG.C`](@ref).
 
@@ -58,12 +59,32 @@ mutable struct CRGData
 
     function CRGData(path::String, dataset::Cint, cp::Cint)
         d = new(path, dataset, cp)
-        finalizer(_release!, d)
+        finalizer(_finalize!, d)
         return d
     end
 end
 
-# Idempotent; safe to call from a finalizer (so it must not take a lock).
+# Finalizers may run at any allocation, on any thread, while another task holds
+# `LOCK` and is inside the (non-thread-safe) C library, so they must neither
+# touch the C library unlocked nor block or switch tasks waiting for `LOCK`
+# (see "Safe use of Finalizers" in the Julia manual). Take the lock with
+# `trylock`; if it is busy, re-register this finalizer so the handle is retried
+# at a later GC rather than leaked. An explicit `close` makes this a no-op.
+function _finalize!(d::CRGData)
+    if trylock(LOCK)
+        try
+            _release!(d)
+        finally
+            unlock(LOCK)
+        end
+    else
+        finalizer(_finalize!, d)
+    end
+    return nothing
+end
+
+# Idempotent (a released handle is marked by -1/0 and never freed twice).
+# Callers must hold `LOCK`.
 function _release!(d::CRGData)
     if d.contact_point >= 0
         C.crgContactPointDelete(d.contact_point)
@@ -152,7 +173,7 @@ function _query(f, d::CRGData, _)
     _check(d)
     return lock(LOCK) do
         _check(d)
-        res = f()
+        res = GC.@preserve d f()
         res.status == 0 ? nothing : res
     end
 end

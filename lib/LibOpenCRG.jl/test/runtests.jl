@@ -2,11 +2,10 @@ using Test
 using Aqua
 using LibOpenCRG
 
-# The sample .crg files live in the OpenCRG.jl repo root's test/data and are
-# deliberately not duplicated here. This works because the registered
-# package is tested from a checkout of the repository, where this file sits
-# at lib/LibOpenCRG.jl/test/.
-const DATA = joinpath(@__DIR__, "..", "..", "..", "test", "data")
+# Sample files copied from the upstream asam-ev/OpenCRG project (Apache-2.0);
+# see test/data/README.md. Kept inside this subpackage so the tests also work
+# when LibOpenCRG is tested on its own.
+const DATA = joinpath(@__DIR__, "data")
 const BANKED = joinpath(DATA, "handmade_curved_banked_sloped.crg")
 const MINIMAL = joinpath(DATA, "handmade_curved_minimalist.crg")
 
@@ -111,5 +110,70 @@ const MINIMAL = joinpath(DATA, "handmade_curved_minimalist.crg")
         end
         GC.gc(); GC.gc()
         @test read_crg(d -> isopen(d), MINIMAL)
+    end
+
+    @testset "finalizer never touches the library while it is locked" begin
+        d = read_crg(MINIMAL)
+        held = Base.Event(); done = Base.Event()
+        holder = Threads.@spawn lock(LibOpenCRG.LOCK) do
+            notify(held); wait(done)
+        end
+        wait(held)
+        LibOpenCRG._finalize!(d)       # lock busy elsewhere: must not release
+        @test isopen(d)
+        notify(done); wait(holder)
+        LibOpenCRG._finalize!(d)       # lock free: releases
+        @test !isopen(d)
+        LibOpenCRG._finalize!(d)       # idempotent
+        close(d)
+        @test !isopen(d)
+    end
+
+    @testset "finalizers are safe under concurrent evaluation" begin
+        # Finalizers run on whichever thread triggers GC, while other tasks may
+        # be inside the (non-thread-safe) C library. Churn handles and GC while
+        # other tasks evaluate a long-lived road; results must stay correct and
+        # no handle may be lost or double-freed.
+        shared = read_crg(BANKED)
+        zref = uv2z(shared, 10.0, 0.5)
+        xyref = uv2xy(shared, 10.0, 0.5)
+        stop = Threads.Atomic{Bool}(false)
+        nworkers = max(2, Threads.nthreads())
+        workers = [Threads.@spawn(begin
+            ok = true
+            n = 0
+            while true   # at least one evaluation, even if the churn loop finishes first
+                ok &= uv2z(shared, 10.0, 0.5) == zref
+                ok &= uv2xy(shared, 10.0, 0.5) == xyref
+                n += 1
+                stop[] && break
+                yield()
+            end
+            (ok, n)
+        end) for _ in 1:nworkers]
+        for i in 1:400
+            read_crg(i % 2 == 0 ? MINIMAL : BANKED)   # dropped without close
+            i % 25 == 0 && GC.gc()
+            i % 5 == 0 && yield()
+        end
+        # explicit close racing with the finalizer of an abandoned handle
+        for _ in 1:50
+            d = read_crg(MINIMAL)
+            close(d)
+            close(d)
+            GC.gc()
+        end
+        stop[] = true
+        results = fetch.(workers)
+        @test all(first, results)
+        @test all(r -> r[2] > 0, results)
+        GC.gc(); GC.gc()
+        @test uv2z(shared, 10.0, 0.5) == zref
+        # abandoned handles must still be reclaimable: loading keeps working
+        for _ in 1:3
+            GC.gc()
+            @test read_crg(d -> isopen(d), MINIMAL)
+        end
+        close(shared)
     end
 end

@@ -234,47 +234,57 @@ end
 """
     uv2xy(data, u, v) -> (x, y)
 
-World coordinates of the road-frame point `(u, v)`. Returns `(NaN, NaN)` if the
-C library reports failure (the reference line is extrapolated beyond the `u`
-range, so this is rare).
+World coordinates of the road-frame point `(u, v)`. **Does not return `NaN`
+outside the road**: the C library extrapolates the reference line beyond the
+`u` range and the lateral offset beyond the `v` range, so out-of-domain points
+map to extrapolated world coordinates. `(NaN, NaN)` is returned only if the C
+library reports failure.
 """
 uv2xy(d::CRGData, u::Real, v::Real) = _eval(C.crgEvaluv2xy, d, u, v, Val(2))
 
 """
     xy2uv(data, x, y) -> (u, v)
 
-Road-frame coordinates of the world point `(x, y)`. Returns `(NaN, NaN)` if the
-point cannot be mapped onto the road.
+Road-frame coordinates of the world point `(x, y)`. **Does not return `NaN`
+outside the road**: points off the road are extrapolated like [`uv2xy`](@ref)
+(so the returned `(u, v)` may lie outside [`urange`](@ref)/[`vrange`](@ref)).
+`(NaN, NaN)` is returned only if the C library reports failure.
 """
 xy2uv(d::CRGData, x::Real, y::Real) = _eval(C.crgEvalxy2uv, d, x, y, Val(2))
 
 """
     uv2z(data, u, v) -> z
 
-Bilinearly interpolated elevation at road-frame `(u, v)`; `NaN` outside the road
-or in undefined grid cells.
+Bilinearly interpolated elevation at road-frame `(u, v)`. Outside the grid the
+C library clamps to the nearest edge values rather than returning `NaN`;
+`NaN` is returned for undefined (NaN) grid cells, which can include edge
+cells reached from outside the road.
 """
 uv2z(d::CRGData, u::Real, v::Real) = only(_eval(C.crgEvaluv2z, d, u, v, Val(1)))
 
 """
     xy2z(data, x, y) -> z
 
-Bilinearly interpolated elevation at world `(x, y)`; `NaN` outside the road
-or in undefined grid cells.
+Bilinearly interpolated elevation at world `(x, y)`; same out-of-domain
+behaviour as [`uv2z`](@ref) (clamped to the edge, `NaN` only for undefined grid cells).
 """
 xy2z(d::CRGData, x::Real, y::Real) = only(_eval(C.crgEvalxy2z, d, x, y, Val(1)))
 
 """
     uv2pk(data, u, v) -> (heading, curvature)
 
-Heading (rad) and curvature (1/m) at road-frame `(u, v)`; `NaN`s outside the road.
+Heading (rad) and curvature (1/m) at road-frame `(u, v)`. Outside the `u`
+range the values are those of the extrapolated reference line (heading and
+curvature of the end, or 0 before the start); `NaN`s only if the C library
+reports failure.
 """
 uv2pk(d::CRGData, u::Real, v::Real) = _eval(C.crgEvaluv2pk, d, u, v, Val(2))
 
 """
     xy2pk(data, x, y) -> (heading, curvature)
 
-Heading (rad) and curvature (1/m) at world `(x, y)`; `NaN`s outside the road.
+Heading (rad) and curvature (1/m) at world `(x, y)`; same out-of-domain
+behaviour as [`uv2pk`](@ref).
 """
 xy2pk(d::CRGData, x::Real, y::Real) = _eval(C.crgEvalxy2pk, d, x, y, Val(2))
 
@@ -287,7 +297,8 @@ World-frame grids of the road surface, matching `OpenCRG.road_surface_grid`:
 
 `u` runs over the data set's range with its native increment; `v` is
 reconstructed from the lateral range and increment, so roads with
-non-uniform (explicit) `v` sections are not supported and throw.
+non-uniform (explicit) `v` sections (reported increment `dv == 0`) are not
+supported and throw an error.
 """
 function road_surface_grid(d::CRGData)
     umin, umax = urange(d)

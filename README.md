@@ -24,11 +24,25 @@ u, v, X, Y, Z = road_surface_grid(data) # world-frame grids, size (length(u), le
 
 ## Scope
 
-Reference-line integration, lateral offsetting, elevation/banking assembly and
-`REFLINE_*`/`REFPOINT_*`/`SCALE_*` modifiers are implemented and were
-cross-validated against the upstream C reference library. Interpolated
-point evaluation (`uv2xy`, `xy2z`, ...) is not provided. `$ROAD_CRG_OPTS` and
-`$ROAD_CRG_MPRO` are parsed but have no effect.
+Reference-line integration, lateral offsetting and elevation/banking assembly
+are implemented and were cross-validated against the upstream C reference
+library, along with these `$ROAD_CRG_MODS` modifiers: `SCALE_*`,
+`REFLINE_OFFSET_*`/`REFLINE_ROTCENTER_*`, and `REFPOINT_X/Y/Z/PHI`. Restrictions:
+
+- `REFPOINT_U`, `REFPOINT_V` and their `_FRACTION` variants (arbitrary anchor
+  points) are not supported and throw an error; only the default anchor
+  (`u = start_u`, `v = 0`) is.
+- `REFPOINT_X/Y/Z/PHI` need an exact `v = 0` long-section
+  column (after `SCALE_WIDTH`); the elevation at the anchor is not interpolated,
+  so the call throws otherwise.
+- `GRID_NAN_MODE` and `GRID_NAN_OFFSET` are parsed but ignored: NaN cells in the
+  grid are not filled or replaced.
+- `$ROAD_CRG_OPTS` and `$ROAD_CRG_MPRO` are parsed but have no effect.
+- `SCALE_LENGTH`, `SCALE_CURVATURE`, `SCALE_SLOPE` and `SCALE_BANKING` invalidate
+  the corresponding end anchors, as in the C library.
+
+Interpolated point evaluation (`uv2xy`, `xy2z`, ...) is not provided; see
+`LibOpenCRG.jl` below.
 
 ## LibOpenCRG.jl
 

@@ -21,6 +21,10 @@ permissions:
   security-events: read
   statuses: read
 jobs:
+  # The registered packages live at the repo root (OpenCRG) and in
+  # lib/LibOpenCRG.jl (LibOpenCRG). TagBot tags a single package per run, so
+  # each package gets its own step; the subdir step reads the registry entry
+  # of the package at `subdir` and creates `LibOpenCRG-v*` tags.
   TagBot:
     if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
     runs-on: ubuntu-latest
@@ -29,3 +33,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ssh: ${{ secrets.DOCUMENTER_KEY }}
+      - uses: JuliaRegistries/TagBot@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ssh: ${{ secrets.DOCUMENTER_KEY }}
+          subdir: lib/LibOpenCRG.jl

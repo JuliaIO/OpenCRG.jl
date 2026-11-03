@@ -11,6 +11,9 @@ jobs:
   test:
     name: ${{ matrix.package }} - Julia ${{ matrix.version }} - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      # LibOpenCRG's finalizer test needs more than one thread to be meaningful.
+      JULIA_NUM_THREADS: 2
     strategy:
       fail-fast: false
       matrix:

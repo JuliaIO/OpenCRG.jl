@@ -4,7 +4,13 @@
 Thin `ccall` wrapper around the upstream ASAM OpenCRG C reference
 implementation ("baselib"), via `OpenCRG_jll` (test-only helper).
 
-This package exists **only** to serve as a test oracle for cross-validating
+This is a private copy of the `ccall` layer of the registered `LibOpenCRG`
+package (`lib/LibOpenCRG.jl`, submodule `LibOpenCRG.C`). It is kept here,
+rather than depending on that package, so that OpenCRG.jl's tests need no
+extra dependency setup on any supported Julia version (`[sources]` is not
+available on 1.10).
+
+This module exists **only** to serve as a test oracle for cross-validating
 the pure-Julia `OpenCRG.jl` package. It is not intended for use in production
 vehicle models: the pure-Julia implementation is the primary implementation.
 

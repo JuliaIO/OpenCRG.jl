@@ -30,6 +30,27 @@ cross-validated against the upstream C reference library. Interpolated
 point evaluation (`uv2xy`, `xy2z`, ...) is not provided. `$ROAD_CRG_OPTS` and
 `$ROAD_CRG_MPRO` are parsed but have no effect.
 
+## LibOpenCRG.jl
+
+This repository also hosts a second package, [`LibOpenCRG.jl`](lib/LibOpenCRG.jl),
+in `lib/LibOpenCRG.jl`. It wraps the upstream OpenCRG C reference library
+(through [`OpenCRG_jll`](https://github.com/JuliaBinaryWrappers/OpenCRG_jll.jl))
+behind an interface similar to OpenCRG.jl's (`read_crg`, `CRGData`,
+`road_surface_grid`) and adds the point evaluation functions that OpenCRG.jl
+does not provide: `uv2xy`, `xy2uv`, `uv2z`, `xy2z`, `uv2pk`, `xy2pk`. The raw
+`ccall` bindings are available as `LibOpenCRG.C`. OpenCRG.jl itself stays
+pure Julia and does not depend on LibOpenCRG; its tests cross-validate against
+the C library through a small private helper in `test/helpers`.
+
+```julia
+using Pkg; Pkg.add("LibOpenCRG")
+using LibOpenCRG
+read_crg("road.crg") do data
+    x, y = uv2xy(data, 10.0, 0.5)
+    z = xy2z(data, x, y)
+end
+```
+
 ## Test data and licensing
 
 This package is MIT-licensed. The `.crg` files in `test/data/` named

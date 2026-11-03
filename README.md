@@ -53,9 +53,12 @@ end
 
 ## Test data and licensing
 
-This package is MIT-licensed. The `.crg` files in `test/data/` named
+The code in this repository is MIT-licensed; the test data is not uniformly so.
+The `.crg` files in `test/data/` named
 `handmade_*` and `belgian_block.crg` are sample files from the upstream
 [asam-ev/OpenCRG](https://github.com/asam-ev/OpenCRG) project, distributed under
 the Apache License 2.0 (see the notice at the top of each file;
 `belgian_block.crg` data courtesy of DaimlerChrysler, 2005). The `synthetic_*`
-files were created for this package's tests. See `test/data/README.md`.
+files were created for this package's tests. See `test/data/README.md`, `test/data/LICENSE-APACHE-2.0` and
+`test/data/NOTICE` (upstream's notice). The Apache-2.0 sample files are used only
+for testing and are not part of the code's MIT license.

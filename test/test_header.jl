@@ -1,4 +1,3 @@
-# lib/OpenCRG/test/test_header.jl
 @testset "header tokenizing" begin
     @testset "find_header_end / split_lines on a real file" begin
         bytes = read(joinpath(DATA, "handmade_curved_minimalist.crg"))

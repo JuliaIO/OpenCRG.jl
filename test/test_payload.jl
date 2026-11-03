@@ -1,4 +1,3 @@
-# lib/OpenCRG/test/test_payload.jl
 @testset "ASCII payload decoding" begin
     @testset "decode_ascii_field" begin
         @test OpenCRG.decode_ascii_field("**unused**") == 0.0   # exact literal only

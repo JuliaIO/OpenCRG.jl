@@ -1,4 +1,3 @@
-# lib/OpenCRG/test/test_kddef.jl
 @testset "\$KD_DEFINITION parsing" begin
     @testset "position-form (at v = ...), U: lines ignored" begin
         lines = [

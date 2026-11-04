@@ -6,9 +6,12 @@ JET = "c3a54625-cd67-489e-a8e7-0a5a0ff4e31b"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+# LibOpenCRG is the package under test, resolved via [sources] (path dep); an
+# unbounded range keeps CompatHelper from proposing a self-compat entry.
+LibOpenCRG = ">= 0"
 Aqua = "0.8"
 ExplicitImports = "1.10"
-JET = "0.9, 0.10, 0.11"
+JET = "0.9, 0.10, 0.11, 0.12"
 Test = "1"
 
 [sources]

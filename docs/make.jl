@@ -1,18 +1,16 @@
 using Pkg
-# Develop both packages from this checkout, so the docs always match the source.
+# Develop the package from this checkout, so the docs always match the source.
 const ROOT = dirname(@__DIR__)
-Pkg.develop([PackageSpec(path = ROOT),
-             PackageSpec(path = joinpath(ROOT, "lib", "LibOpenCRG.jl"))])
+Pkg.develop(PackageSpec(path = ROOT))
 
 using Documenter
-using OpenCRG, LibOpenCRG
+using OpenCRG
 
 DocMeta.setdocmeta!(OpenCRG, :DocTestSetup, :(using OpenCRG); recursive = true)
-DocMeta.setdocmeta!(LibOpenCRG, :DocTestSetup, :(using LibOpenCRG); recursive = true)
 
 makedocs(;
     sitename = "OpenCRG.jl",
-    modules = [OpenCRG, LibOpenCRG],
+    modules = [OpenCRG],
     authors = "Anshul Singhvi",
     checkdocs = :exports,
     doctest = true,

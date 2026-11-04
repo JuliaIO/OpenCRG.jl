@@ -23,7 +23,7 @@ jobs:
         run: |
           julia --project=docs -e '
             using Pkg
-            Pkg.develop([PackageSpec(path=pwd()), PackageSpec(path="lib/LibOpenCRG.jl")])
+            Pkg.develop(PackageSpec(path=pwd()))
             Pkg.instantiate()'
       - name: Build and deploy
         run: julia --project=docs --code-coverage=none docs/make.jl

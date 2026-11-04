@@ -10,7 +10,7 @@ reference line into world-frame `(X, Y, Z)` grids. No C library is needed.
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/JuliaIO/OpenCRG.jl")  # not yet registered
+Pkg.add("OpenCRG")
 Pkg.add("DataInterpolations")
 ```
 
@@ -94,11 +94,3 @@ on its settings.
 (an error is thrown), `REFPOINT_X/Y/Z/PHI` need an exact `v = 0` long-section
 column, `GRID_NAN_MODE`/`GRID_NAN_OFFSET` are parsed but ignored (NaN cells are
 not filled), and `\$ROAD_CRG_OPTS`/`\$ROAD_CRG_MPRO` have no effect.
-
-## LibOpenCRG
-
-The repository also contains [`LibOpenCRG.jl`](https://github.com/JuliaIO/OpenCRG.jl/tree/main/lib/LibOpenCRG.jl),
-a separate package that wraps the upstream C reference library (through
-`OpenCRG_jll`) with a similar interface. Use it when you want the reference
-implementation's own point evaluation (`uv2xy`, `xy2uv`, `uv2z`, `xy2z`,
-`uv2pk`, `xy2pk`). See the [API reference](@ref) for both.

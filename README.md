@@ -1,78 +1,67 @@
 # OpenCRG.jl
 
+[![CI](https://github.com/JuliaIO/OpenCRG.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/JuliaIO/OpenCRG.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Docs stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://juliaio.github.io/OpenCRG.jl/stable)
+[![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://juliaio.github.io/OpenCRG.jl/dev)
+[![codecov](https://codecov.io/gh/JuliaIO/OpenCRG.jl/graph/badge.svg)](https://codecov.io/gh/JuliaIO/OpenCRG.jl)
+[![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+
 A pure-Julia reader for [ASAM OpenCRG](https://www.asam.net/standards/detail/opencrg/)
-(`.crg`) road surface files. It parses the header sections, decodes ASCII
-(`LRFI`/`LDFI`) and binary (`KRBI`/`KDBI`) payloads, applies `$ROAD_CRG_MODS`,
-and integrates the reference line to produce world-frame `(X, Y, Z)` grids.
-No C library is required.
+`.crg` files: high-resolution road surface elevation on a curved reference line,
+addressed in a road-aligned `(u, v)` frame (`u` along the line, `v` across it).
 
 ## Installation
 
+OpenCRG.jl is not yet in the General registry:
+
 ```julia
 using Pkg
-Pkg.add("OpenCRG")
+Pkg.add(url="https://github.com/JuliaIO/OpenCRG.jl")
 ```
 
-## Example
+Once registered, `Pkg.add("OpenCRG")` will work.
+
+## Main function
+
+`read_crg(path)` parses a file and returns a `CRGData` holding the header
+(`refline`, `mods`, `opts`, `mpro`, `comment`), the reference-line heading `phi`,
+optional `banking` and `slope` channels, the lateral axis `v`, and the elevation
+grid `z`. `road_surface_grid(data)` turns that into world-frame grids
+`(u, v, X, Y, Z)`, where `u` and `v` are axis vectors and `X`, `Y`, `Z` are
+`(length(u), length(v))` matrices. Undefined cells are `NaN`.
+
+## Quick start
+
+Load a fixture and interpolate the centre-line elevation with
+[DataInterpolations.jl](https://github.com/SciML/DataInterpolations.jl):
 
 ```julia
-using OpenCRG
+using OpenCRG, DataInterpolations
 
-data = read_crg("road.crg")            # ::CRGData (header, channels, z-grid)
-u, v, X, Y, Z = road_surface_grid(data) # world-frame grids, size (length(u), length(v))
+data = read_crg("test/data/handmade_curved_banked_sloped.crg")
+u, v, X, Y, Z = road_surface_grid(data)
+
+j = findfirst(==(0.0), v)           # centre-line column
+profile = CubicSpline(Z[:, j], u)   # elevation along the road
+path = CubicSpline(hcat(X[:, j], Y[:, j])', u)  # world (x, y) along the road
+
+profile(10.5)  # 0.5719...
+path(10.5)     # [x, y]
 ```
-
-## Scope
-
-Reference-line integration, lateral offsetting and elevation/banking assembly
-are implemented and were cross-validated against the upstream C reference
-library, along with these `$ROAD_CRG_MODS` modifiers: `SCALE_*`,
-`REFLINE_OFFSET_*`/`REFLINE_ROTCENTER_*`, and `REFPOINT_X/Y/Z/PHI`. Restrictions:
-
-- `REFPOINT_U`, `REFPOINT_V` and their `_FRACTION` variants (arbitrary anchor
-  points) are not supported and throw an error; only the default anchor
-  (`u = start_u`, `v = 0`) is.
-- `REFPOINT_X/Y/Z/PHI` need an exact `v = 0` long-section
-  column (after `SCALE_WIDTH`); the elevation at the anchor is not interpolated,
-  so the call throws otherwise.
-- `GRID_NAN_MODE` and `GRID_NAN_OFFSET` are parsed but ignored: NaN cells in the
-  grid are not filled or replaced.
-- `$ROAD_CRG_OPTS` and `$ROAD_CRG_MPRO` are parsed but have no effect.
-- `SCALE_LENGTH`, `SCALE_CURVATURE`, `SCALE_SLOPE` and `SCALE_BANKING` invalidate
-  the corresponding end anchors, as in the C library.
-
-Interpolated point evaluation (`uv2xy`, `xy2z`, ...) is not provided; see
-`LibOpenCRG.jl` below.
 
 ## LibOpenCRG.jl
 
-This repository also hosts a second package, [`LibOpenCRG.jl`](lib/LibOpenCRG.jl),
-in `lib/LibOpenCRG.jl`. It wraps the upstream OpenCRG C reference library
-(through [`OpenCRG_jll`](https://github.com/JuliaBinaryWrappers/OpenCRG_jll.jl))
-behind an interface similar to OpenCRG.jl's (`read_crg`, `CRGData`,
-`road_surface_grid`) and adds the point evaluation functions that OpenCRG.jl
-does not provide: `uv2xy`, `xy2uv`, `uv2z`, `xy2z`, `uv2pk`, `xy2pk`. The raw
-`ccall` bindings are available as `LibOpenCRG.C`. OpenCRG.jl itself stays
-pure Julia and does not depend on LibOpenCRG; its tests cross-validate against
-the C library through a small private helper in `test/helpers`.
+[`lib/LibOpenCRG.jl`](lib/LibOpenCRG.jl) is a separate package that wraps the
+upstream C library and adds point evaluation (`uv2xy`, `xy2z`, ...), which
+OpenCRG.jl does not provide.
 
-```julia
-using Pkg; Pkg.add("LibOpenCRG")
-using LibOpenCRG
-read_crg("road.crg") do data
-    x, y = uv2xy(data, 10.0, 0.5)
-    z = xy2z(data, x, y)
-end
-```
+## Documentation
 
-## Test data and licensing
+See the [documentation](https://juliaio.github.io/OpenCRG.jl/stable) for the
+supported modifiers, known limitations and out-of-domain behaviour.
 
-The code in this repository is MIT-licensed; the test data is not uniformly so.
-The `.crg` files in `test/data/` named
-`handmade_*` and `belgian_block.crg` are sample files from the upstream
-[asam-ev/OpenCRG](https://github.com/asam-ev/OpenCRG) project, distributed under
-the Apache License 2.0 (see the notice at the top of each file;
-`belgian_block.crg` data courtesy of DaimlerChrysler, 2005). The `synthetic_*`
-files were created for this package's tests. See `test/data/README.md`, `test/data/LICENSE-APACHE-2.0` and
-`test/data/NOTICE` (upstream's notice). The Apache-2.0 sample files are used only
-for testing and are not part of the code's MIT license.
+## License
+
+The code is MIT-licensed. The sample files in `test/data` from the upstream
+[asam-ev/OpenCRG](https://github.com/asam-ev/OpenCRG) project are Apache-2.0
+(see `test/data/LICENSE-APACHE-2.0` and `test/data/NOTICE`).

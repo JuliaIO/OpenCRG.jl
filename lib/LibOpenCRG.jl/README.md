@@ -1,8 +1,6 @@
 # LibOpenCRG.jl
 
 [![CI](https://github.com/JuliaIO/OpenCRG.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/JuliaIO/OpenCRG.jl/actions/workflows/CI.yml?query=branch%3Amain)
-[![Docs stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://juliaio.github.io/OpenCRG.jl/stable)
-[![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://juliaio.github.io/OpenCRG.jl/dev)
 [![codecov](https://codecov.io/gh/JuliaIO/OpenCRG.jl/graph/badge.svg)](https://codecov.io/gh/JuliaIO/OpenCRG.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
@@ -16,7 +14,7 @@ pure-Julia reader, and adds point evaluation (`uv2xy`, `xy2uv`, `uv2z`, `xy2z`,
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/JuliaIO/OpenCRG.jl", subdir="lib/LibOpenCRG.jl")
+Pkg.add("LibOpenCRG")
 ```
 
 ## Main function
@@ -47,8 +45,7 @@ end
 
 `read_crg`, `CRGData` and `road_surface_grid` share names with OpenCRG.jl's
 exports; qualify them if you load both. The C library extrapolates or clamps
-outside the road rather than failing; see the
-[documentation](https://juliaio.github.io/OpenCRG.jl/stable) for details.
+outside the road rather than failing.
 
 ## License
 

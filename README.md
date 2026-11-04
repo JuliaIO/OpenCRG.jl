@@ -16,7 +16,7 @@ OpenCRG.jl is not yet in the General registry:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/JuliaIO/OpenCRG.jl")
+Pkg.add("OpenCRG")
 ```
 
 The quick start below also needs `Pkg.add("DataInterpolations")`.
@@ -57,7 +57,7 @@ OpenCRG.jl does not provide.
 
 ## Documentation
 
-See the [documentation](https://juliaio.github.io/OpenCRG.jl/stable) for the
+See the OpenCRG.jl [documentation](https://juliaio.github.io/OpenCRG.jl/stable) for the
 supported modifiers, known limitations and out-of-domain behaviour.
 
 ## License

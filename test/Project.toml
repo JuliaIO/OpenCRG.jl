@@ -9,7 +9,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 JuliaC = "0.3.8"
-SafeTestsets = "0.1, 1"
+SafeTestsets = "0.1"
 # OpenCRG is the package under test, resolved via [sources] (path dep); an
 # unbounded range keeps CompatHelper from proposing a self-compat entry.
 OpenCRG = ">= 0"

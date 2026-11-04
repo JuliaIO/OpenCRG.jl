@@ -3,8 +3,7 @@ using Test, OpenCRG, JuliaC
 @testset "trimmed executable" begin
     mktempdir() do dir
         img = ImageRecipe(output_type="--output-exe", file=joinpath(@__DIR__, "app.jl"),
-                          project=dirname(Base.active_project()), trim_mode="safe",
-                          julia_args=["--experimental"])
+                          project=dirname(@__DIR__), trim_mode="safe")
         link = LinkRecipe(image_recipe=img, outname=joinpath(dir, "opencrg-trim"), rpath="@bundle")
         bundle = BundleRecipe(link_recipe=link, output_dir=dir)
         elapsed = @elapsed begin

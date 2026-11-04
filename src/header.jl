@@ -218,7 +218,7 @@ function parse_kd_definition(lines::Vector{String})
     for line in lines
         if startswith(line, "#:")
             code = uppercase(strip(line[3:end]))
-            haskey(CRG_FORMAT_CODES, code) || error("unknown CRG data format code: $code")
+            haskey(CRG_FORMAT_CODES, code) || throw(UnrecognizedFormatError(Symbol(code)))
             format_code = CRG_FORMAT_CODES[code]
         elseif startswith(line, "U:")
             continue

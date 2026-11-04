@@ -74,6 +74,12 @@ function decode_ascii_payload(payload_lines::Vector{<:AbstractString}, format_co
     return data
 end
 
+struct UnrecognizedFormatError <: Exception
+    format_code::Symbol
+end
+
+Base.showerror(io::IO, err::UnrecognizedFormatError) = print(io, "unrecognized CRG data format code: ", err.format_code)
+
 """
     decode_binary_payload(payload, format_code, nchannels) -> Matrix{Float64}
 
@@ -99,12 +105,6 @@ spec's end-of-payload padding quantum) — anything bigger means a truncated
 or corrupted file is silently dropping most of a real row, the same
 truncation risk `decode_ascii_payload` (Task 7) guards against.
 """
-struct UnrecognizedFormatError <: Exception
-    format_code::Symbol
-end
-
-Base.showerror(io::IO, err::UnrecognizedFormatError) = print(io, "unrecognized binary payload format: ", err.format_code)
-
 function decode_binary_payload(payload::AbstractVector{UInt8}, format_code::Symbol, nchannels::Int)
     format_code == :KRBI && return decode_binary_payload_typed(payload, Float32, nchannels)
     format_code == :KDBI && return decode_binary_payload_typed(payload, Float64, nchannels)

@@ -1,5 +1,5 @@
 [deps]
-DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
+DataInterpolationsND = "4f1ef021-621a-47a5-ac8a-95402a2d1ea8"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 OpenCRG = "40a2bf50-15af-408a-8ff9-1cb7955b13ad"
 
@@ -7,6 +7,6 @@ OpenCRG = "40a2bf50-15af-408a-8ff9-1cb7955b13ad"
 OpenCRG = {path = ".."}
 
 [compat]
-DataInterpolations = "8"
+DataInterpolationsND = "0.1"
 Documenter = "1"
 julia = "1.10"

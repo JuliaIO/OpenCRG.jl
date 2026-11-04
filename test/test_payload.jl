@@ -218,3 +218,7 @@ end
     @test err.format_code === :UNKNOWN
     @test occursin("UNKNOWN", sprint(showerror, err))
 end
+
+@testset "binary decoder documentation" begin
+    @test occursin("big-endian binary payload", string(@doc OpenCRG.decode_binary_payload))
+end

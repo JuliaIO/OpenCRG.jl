@@ -1,9 +1,12 @@
 
 """
-A fully parsed OpenCRG file: header metadata plus raw channels. No
-interpolation/evaluation lives here — see `transform.jl`'s
-`road_surface_grid` for the batched forward transform into world-frame
-grids.
+A fully parsed OpenCRG file holding all data from that file: header metadata
+(`refline`, `mods`, `opts`, `mpro`, `comment` and `format_code`), reference-line
+heading `phi`, optional `banking` and `slope` channels, the lateral axis `v`,
+and the raw elevation grid `z`.
+
+See [`road_surface_grid`](@ref) for the batched forward transform into
+world-frame grids. This object does not perform interpolation or evaluation.
 """
 struct CRGData
     comment::String

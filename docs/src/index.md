@@ -55,10 +55,18 @@ u, v, X, Y, Z = OpenCRG.road_surface_grid(data)
 size(Z)
 ```
 
+`u` and `v` are the road-frame coordinates: the distance along the track and
+the distance across it (lateral offset from the reference line). `X`, `Y` and
+`Z` are the Cartesian world-frame coordinates of each `(u, v)` grid node.
+
 ### Interpolate with DataInterpolations.jl
 
 OpenCRG.jl only provides the grid. To evaluate it between nodes, hand the
-columns and rows to [DataInterpolations.jl](https://docs.sciml.ai/DataInterpolations/stable/).
+columns and rows to an interpolation package, like
+[Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl) or
+[DataInterpolationsND.jl](https://github.com/SciML/DataInterpolationsND.jl).
+The examples below use 1D slices with
+[DataInterpolations.jl](https://docs.sciml.ai/DataInterpolations/stable/).
 Elevation along the reference line (the `v = 0` column):
 
 ```@example walkthrough

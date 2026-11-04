@@ -26,7 +26,12 @@ calls are serialized with a lock, and finalizers never block.
 
 ## Quick start
 
-Also needs `Pkg.add("DataInterpolations")` for the spline step:
+Also needs `Pkg.add("DataInterpolations")` for the spline step. `u` and `v` are
+the distances along and across the track, `x`, `y`, `z` Cartesian world
+coordinates. The grid can be handed to any interpolation package, like
+[Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl) or
+[DataInterpolationsND.jl](https://github.com/SciML/DataInterpolationsND.jl);
+here a 1D slice goes to [DataInterpolations.jl](https://github.com/SciML/DataInterpolations.jl):
 
 ```julia
 using LibOpenCRG, DataInterpolations
@@ -37,6 +42,7 @@ read_crg(joinpath(pkgdir(LibOpenCRG), "test", "data", "handmade_curved_banked_sl
     u, v = xy2uv(data, x, y)      # world -> road frame: (10.0, 0.5)
     uv2z(data, u, v)              # elevation: 0.561...
     uv2pk(data, u, v)             # heading, curvature: (0.099, 0.0110...)
+    # u, v: along- and across-track distance; X, Y, Z: Cartesian world coordinates
     u, v, X, Y, Z = road_surface_grid(data)  # as in OpenCRG.jl
     j = findfirst(==(0.0), v)     # centre-line column
     CubicSpline(Z[:, j], u)(10.5) # elevation along the road

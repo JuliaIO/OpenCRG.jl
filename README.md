@@ -25,12 +25,18 @@ The quick start below also needs `Pkg.add("DataInterpolations")`.
 (`refline`, `mods`, `opts`, `mpro`, `comment`), the reference-line heading `phi`,
 optional `banking` and `slope` channels, the lateral axis `v`, and the elevation
 grid `z`. `road_surface_grid(data)` turns that into world-frame grids
-`(u, v, X, Y, Z)`, where `u` and `v` are axis vectors and `X`, `Y`, `Z` are
-`(length(u), length(v))` matrices. Undefined cells are `NaN`.
+`(u, v, X, Y, Z)`, where `u` and `v` are the along-track and across-track
+distances (axis vectors) and `X`, `Y`, `Z` are the Cartesian world-frame
+coordinates of each grid node, as `(length(u), length(v))` matrices. Undefined
+cells are `NaN`.
 
 ## Quick start
 
-Load a fixture and interpolate the centre-line elevation with
+Load a fixture and interpolate along the centre line. OpenCRG.jl only provides
+the grid; pass its columns and rows to an interpolation package, like
+[Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl) or
+[DataInterpolationsND.jl](https://github.com/SciML/DataInterpolationsND.jl).
+Here we use 1D slices with
 [DataInterpolations.jl](https://github.com/SciML/DataInterpolations.jl):
 
 ```julia

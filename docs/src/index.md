@@ -9,7 +9,9 @@ binary payloads, applies the `\$ROAD_CRG_MODS` modifiers and integrates the
 reference line into world-frame `(X, Y, Z)` grids. No C library is needed.
 
 ```julia
-using Pkg; Pkg.add("OpenCRG")
+using Pkg
+Pkg.add(url="https://github.com/JuliaIO/OpenCRG.jl")  # not yet registered
+Pkg.add("DataInterpolations")
 ```
 
 ## Walkthrough
@@ -27,7 +29,7 @@ using OpenCRG
 using DataInterpolations
 
 path = joinpath(pkgdir(OpenCRG), "test", "data", "handmade_curved_banked_sloped.crg")
-data = OpenCRG.read_crg(path)
+data = OpenCRG.read_crg(path);
 ```
 
 It holds the header (`data.refline`, `data.mods`, ...), the per-`u` channels

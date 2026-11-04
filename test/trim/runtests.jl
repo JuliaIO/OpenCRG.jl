@@ -1,9 +1,17 @@
-using Test, OpenCRG
+using Test, OpenCRG, JuliaC
 
 @testset "trimmed executable" begin
     mktempdir() do dir
-        build = `$(Base.julia_cmd()) --startup-file=no --project=$(@__DIR__) -e 'using JuliaC; JuliaC.main(ARGS)' -- --output-exe opencrg-trim --bundle $dir --trim=safe --experimental $(joinpath(@__DIR__, "app.jl"))`
-        elapsed = @elapsed run(Cmd(build; dir=dir))
+        img = ImageRecipe(output_type="--output-exe", file=joinpath(@__DIR__, "app.jl"),
+                          project=dirname(Base.active_project()), trim_mode="safe",
+                          julia_args=["--experimental"])
+        link = LinkRecipe(image_recipe=img, outname=joinpath(dir, "opencrg-trim"), rpath="@bundle")
+        bundle = BundleRecipe(link_recipe=link, output_dir=dir)
+        elapsed = @elapsed begin
+            compile_products(img)
+            link_products(link)
+            bundle_products(bundle)
+        end
         exe = joinpath(dir, "bin", Sys.iswindows() ? "opencrg-trim.exe" : "opencrg-trim")
         @info "Trimmed executable" build_seconds=elapsed size_bytes=filesize(exe)
         for name in ("handmade_curved_banked_sloped.crg", "belgian_block.crg", "synthetic_hairpin.crg")

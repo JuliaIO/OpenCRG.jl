@@ -1,3 +1,6 @@
+using Test, OpenCRG
+const DATA = joinpath(@__DIR__, "data")
+
 @testset "integrate_reference_line" begin
     @testset "Case A: no end anchoring, simple forward Euler" begin
         r = OpenCRG.parse_road_crg(["REFERENCE_LINE_INCREMENT=1.0", "REFERENCE_LINE_START_X=0.0", "REFERENCE_LINE_START_Y=0.0"])

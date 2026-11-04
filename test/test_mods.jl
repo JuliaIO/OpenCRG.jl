@@ -1,3 +1,5 @@
+using Test, OpenCRG
+
 @testset "\$ROAD_CRG_MODS parsing" begin
     lines = [
         "SCALE_Z_GRID = 2.0",

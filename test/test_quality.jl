@@ -1,3 +1,5 @@
+using Test, OpenCRG
+
 using ExplicitImports
 
 @testset "ExplicitImports" begin

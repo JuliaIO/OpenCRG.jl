@@ -1,3 +1,6 @@
+using Test, OpenCRG
+const DATA = joinpath(@__DIR__, "data")
+
 @testset "ASCII payload decoding" begin
     @testset "decode_ascii_field" begin
         @test OpenCRG.decode_ascii_field("**unused**") == 0.0   # exact literal only
@@ -202,4 +205,16 @@ end
     phi, banking, slope, v, z = OpenCRG.assemble_channels(raw, channels, r)
     @test phi[1] == 0.25      # row-1 placeholder still gets overwritten...
     @test isnan(phi[2])       # ...but there's no real data to recover the rest from
+end
+
+@testset "unrecognized binary format" begin
+    err = try
+        OpenCRG.decode_binary_payload(UInt8[], :UNKNOWN, 1)
+        nothing
+    catch e
+        e
+    end
+    @test err isa OpenCRG.UnrecognizedFormatError
+    @test err.format_code === :UNKNOWN
+    @test occursin("UNKNOWN", sprint(showerror, err))
 end

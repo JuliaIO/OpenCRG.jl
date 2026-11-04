@@ -1,3 +1,6 @@
+using Test, OpenCRG
+const DATA = joinpath(@__DIR__, "data")
+
 @testset "\$KD_DEFINITION parsing" begin
     @testset "position-form (at v = ...), U: lines ignored" begin
         lines = [

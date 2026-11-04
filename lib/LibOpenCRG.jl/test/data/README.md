@@ -10,6 +10,6 @@ Copies of two small sample files from <https://github.com/asam-ev/OpenCRG>
 They are licensed under the Apache License 2.0; see
 [`LICENSE-APACHE-2.0`](LICENSE-APACHE-2.0) and upstream's
 [`NOTICE`](NOTICE) (verbatim). The license notice is also retained in each
-file's header comment. The code of this package is MIT-licensed (see `../LICENSE`).
+file's header comment. The code of this package is MIT-licensed (see `../../LICENSE`).
 The larger `belgian_block.crg` sample lives only in the repository-root
 `test/data` and is not used by these tests.

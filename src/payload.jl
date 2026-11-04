@@ -1,7 +1,6 @@
 
 const ASCII_FIELD_WIDTH = Dict(:LRFI => 10, :LDFI => 20)
 const FIELDS_PER_RECORD = Dict(:LRFI => 8, :LDFI => 4, :KRBI => 20, :KDBI => 10)
-const BINARY_ELEM_TYPE = Dict(:KRBI => Float32, :KDBI => Float64)
 
 """
     decode_ascii_field(raw) -> Float64

@@ -22,7 +22,15 @@ include("helpers/LibOpenCRG.jl")
 end
 
 if VERSION >= v"1.12"
-    trim_project = joinpath(@__DIR__, "trim")
-    run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$trim_project -e 'using Pkg; Pkg.instantiate()'`, "JULIA_LOAD_PATH" => "@:@stdlib"))
-    run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$trim_project $(joinpath(trim_project, "runtests.jl"))`, "JULIA_LOAD_PATH" => "@:@stdlib"))
+    mktempdir() do trim_project
+        trim_source = joinpath(pkgdir(OpenCRG), "test", "trim")
+        project = read(joinpath(trim_source, "Project.toml"), String)
+        project = replace(project, "path = \"../..\"" => "path = $(repr(pkgdir(OpenCRG)))")
+        write(joinpath(trim_project, "Project.toml"), project)
+        for file in ("app.jl", "runtests.jl")
+            cp(joinpath(trim_source, file), joinpath(trim_project, file))
+        end
+        run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$trim_project -e 'using Pkg; Pkg.instantiate()'`, "JULIA_LOAD_PATH" => "@:@stdlib"))
+        run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$trim_project $(joinpath(trim_project, "runtests.jl"))`, "JULIA_LOAD_PATH" => "@:@stdlib"))
+    end
 end

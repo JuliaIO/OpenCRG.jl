@@ -1,7 +1,6 @@
 
 const ASCII_FIELD_WIDTH = Dict(:LRFI => 10, :LDFI => 20)
 const FIELDS_PER_RECORD = Dict(:LRFI => 8, :LDFI => 4, :KRBI => 20, :KDBI => 10)
-const BINARY_ELEM_TYPE = Dict(:KRBI => Float32, :KDBI => Float64)
 
 """
     decode_ascii_field(raw) -> Float64
@@ -101,7 +100,12 @@ or corrupted file is silently dropping most of a real row, the same
 truncation risk `decode_ascii_payload` (Task 7) guards against.
 """
 function decode_binary_payload(payload::AbstractVector{UInt8}, format_code::Symbol, nchannels::Int)
-    T = BINARY_ELEM_TYPE[format_code]
+    format_code == :KRBI && return decode_binary_payload_typed(payload, Float32, nchannels)
+    format_code == :KDBI && return decode_binary_payload_typed(payload, Float64, nchannels)
+    throw(KeyError(format_code))
+end
+
+function decode_binary_payload_typed(payload::AbstractVector{UInt8}, ::Type{T}, nchannels::Int) where {T<:Union{Float32,Float64}}
     esize = sizeof(T)
     row_bytes = nchannels * esize
     nu = length(payload) ÷ row_bytes

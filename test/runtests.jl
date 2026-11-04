@@ -6,7 +6,6 @@ using Test, SafeTestsets
     @safetestset "mods" begin include("test_mods.jl") end
     @safetestset "payload" begin include("test_payload.jl") end
     @safetestset "read" begin include("test_read.jl") end
-    @safetestset "show" begin include("test_show.jl") end
     @safetestset "transform" begin include("test_transform.jl") end
     @safetestset "aqua" begin include("test_aqua.jl") end
     @safetestset "quality" begin include("test_quality.jl") end

@@ -1,12 +1,20 @@
 
 """
-A fully parsed OpenCRG file holding all data from that file: header metadata
-(`refline`, `mods`, `opts`, `mpro`, `comment` and `format_code`), reference-line
-heading `phi`, optional `banking` and `slope` channels, the lateral axis `v`,
-and the raw elevation grid `z`.
+    CRGData
 
-See [`road_surface_grid`](@ref) for the batched forward transform into
-world-frame grids. This object does not perform interpolation or evaluation.
+All data parsed from an OpenCRG file by [`read_crg`](@ref). Fields:
+
+- `comment`: `\$CT` comment lines, joined with newlines
+- `refline`: reference-line and long-section parameters from `\$ROAD_CRG`
+- `format_code`: payload format, one of `:LRFI`, `:LDFI`, `:KRBI`, `:KDBI`
+- `opts`: numeric `\$ROAD_CRG_OPTS` entries, keyed by upper-cased name
+- `mods`: `\$ROAD_CRG_MODS` modifiers (applied by [`road_surface_grid`](@ref), not here)
+- `mpro`: `\$ROAD_CRG_MPRO` projection entries as strings (parsed, never applied)
+- `phi`: reference-line heading at each `u` row (rad); `phi[1]` is the start heading
+- `banking`: cross slope at each `u` row (m/m), or `nothing` if absent
+- `slope`: longitudinal slope at each `u` row (m/m), or `nothing` if absent
+- `v`: lateral positions of the long sections, ascending (m, positive left)
+- `z`: raw `(nu, nv)` elevation grid relative to the reference line (m); columns match `v`
 """
 struct CRGData
     comment::String
@@ -25,19 +33,9 @@ end
 """
     read_crg(path) -> CRGData
 
-Parse an ASAM OpenCRG `.crg` file at `path`. The number of longitudinal
-grid rows is never computed from `\$ROAD_CRG`'s `start_u`/`end_u`/
-`increment` — those fields are sometimes absent entirely (e.g. a
-"minimalist" file that only sets `REFERENCE_LINE_INCREMENT`) and are only
-descriptive/redundant metadata when present. The true row count comes from
-`decode_ascii_payload`/`decode_binary_payload`, which derive it directly
-from the payload's actual size.
-
-Errors immediately, with a clear message, if no channels are declared at
-all (a missing or empty `\$KD_DEFINITION` -- the sign of a non-CRG file, or
-one with no data at all) -- without this check, `nchannels == 0` would reach
-`decode_ascii_payload`/`decode_binary_payload` and fail with a bare, cryptic
-`DivideError` instead.
+Parse the OpenCRG `.crg` file at `path`. The row count comes from the payload
+size. Throws an error if the file declares no channels or no long sections,
+or if the payload is truncated or has an unknown format.
 """
 function read_crg(path::AbstractString)
     bytes = read(path)

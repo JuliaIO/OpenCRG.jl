@@ -5,22 +5,7 @@ const FIELDS_PER_RECORD = Dict(:LRFI => 8, :LDFI => 4, :KRBI => 20, :KDBI => 10)
 """
     decode_ascii_field(raw) -> Float64
 
-Decode one fixed-width ASCII field, exactly as sliced from the payload line
-— NOT pre-stripped by the caller, since the exact-width comparison below
-depends on seeing any trailing padding. 
-
-The literal 10-character content `**unused**`, compared against the RAW 
-(unstripped) field, decodes to `0.0`. This quirk structurally cannot apply 
-to LDFI's 20-character fields: a 20-byte raw field can never string-equal 
-the 10-character literal (their lengths differ), so it always falls through 
-to the numeric path below — matching the reference C decoder's `strcmp` check, 
-which compares the full fixed-width buffer, not a pre-trimmed one.
-
-Once the exact-unused check fails, the field is `strip`ped and parsed as a
-float; any character outside `0123456789+-.eEdD` after stripping decodes to
-NaN (word-agnostic: `*missing*`, `*none*`, etc. all become NaN).
-
-Fortran-style `D`/`d` exponent markers are normalized to `e` before `parse`.
+Decode one fixed-width ASCII payload field (`**unused**` → 0.0, non-numeric → NaN).
 """
 function decode_ascii_field(raw::AbstractString)
     raw == "**unused**" && return 0.0
@@ -36,16 +21,7 @@ end
 """
     decode_ascii_payload(payload_lines, format_code, nchannels) -> Matrix{Float64}
 
-Decode `nchannels`-wide ASCII payload rows (`:LRFI`: 10-char fields,
-8/record; `:LDFI`: 20-char fields, 4/record). The row count `nu` is
-DERIVED as `length(payload_lines) ÷ lines_per_row`, rather than from
-`\$ROAD_CRG`'s `start_u`/`end_u`. It's
-an error for the payload to have a number of lines that isn't a whole
-multiple of `lines_per_row` — silently floor-dividing would quietly drop a
-truncated/corrupted file's leftover partial row instead of surfacing it.
-Each row always starts on a fresh line — per spec §6.4.8, plain-text rows
-never pack a previous row's leftover fields onto the same line, unlike
-binary.
+Decode an ASCII (`:LRFI`/`:LDFI`) payload into an `(nu, nchannels)` matrix.
 """
 function decode_ascii_payload(payload_lines::Vector{<:AbstractString}, format_code::Symbol, nchannels::Int)
     width = ASCII_FIELD_WIDTH[format_code]
@@ -83,27 +59,7 @@ Base.showerror(io::IO, err::UnrecognizedFormatError) = print(io, "unrecognized C
 """
     decode_binary_payload(payload, format_code, nchannels) -> Matrix{Float64}
 
-Decode `nchannels`-wide big-endian binary payload rows (`Float32` for
-`:KRBI`, `Float64` for `:KDBI`). The row count `nu` is DERIVED via floor
-division, `length(payload) ÷ (nchannels * sizeof(elem))` — trailing padding
-bytes (the payload is padded to a multiple of 80 bytes overall, per spec)
-are simply leftover and ignored, for the same reason `decode_ascii_payload`
-derives its row count from the payload rather than trusting
-`\$ROAD_CRG`'s `start_u`/`end_u`. **Rows are packed tightly with no per-row
-padding or alignment** — unlike ASCII, binary row stride is exactly
-`nchannels * sizeof(elem)` bytes; only the very last record of the *entire*
-payload is padded (with NaNs, per spec) to a multiple of 80 bytes. This was
-confirmed against a real file: row 1 begins at byte offset `342*4 = 1368`
-into `belgian_block.crg`'s payload, and `1368 / 80` is not an integer — rows
-do not start on fresh 80-byte records the way ASCII rows do.
-
-Any IEEE-754 NaN bit pattern (not one specific sentinel) decodes as NaN,
-matching the reference decoder's plain `isnan()` check.
-
-The leftover remainder after floor division must be less than 80 bytes (the
-spec's end-of-payload padding quantum) — anything bigger means a truncated
-or corrupted file is silently dropping most of a real row, the same
-truncation risk `decode_ascii_payload` guards against.
+Decode a big-endian binary payload (`:KRBI`/`:KDBI`) into an `(nu, nchannels)` matrix.
 """
 function decode_binary_payload(payload::AbstractVector{UInt8}, format_code::Symbol, nchannels::Int)
     format_code == :KRBI && return decode_binary_payload_typed(payload, Float32, nchannels)
@@ -129,25 +85,7 @@ end
 """
     assemble_channels(raw, channels, refline) -> (phi, banking, slope, v, z)
 
-Split the raw `(nu, nchannels)` matrix into named channels per their role in
-`channels` (from `parse_kd_definition`). Long-section columns are sorted by
-ascending `v` — the position-defined form's declaration order isn't
-guaranteed ascending by spec, only observed as such in example files.
-Row 1's `phi` (1-based; "row 0" in the file/spec's 0-based convention) is
-always overwritten with `refline.start_phi`, regardless of what's stored —
-the reference implementation does this unconditionally, since that row's
-stored value is a documented placeholder, never actually used as an arrival
-heading.
-
-Requires at least one `:long_section` channel — a CRG file with none would
-have no elevation data at all, which is caught here rather than silently
-producing an empty `(nu, 0)` z-matrix that would only fail confusingly much
-later during integration. If no `:phi` channel is declared at all (both vendored
-fixtures always declare one, so this is untested against real data),
-`phi` stays `fill(NaN, nu)` except for the row-1 placeholder overwrite —
-deliberately NOT an error, since NaN already poisons reference-line integration
-loudly rather than silently defaulting to a fabricated straight/`phi=0`
-road.
+Split the raw payload matrix into `(phi, banking, slope, v, z)`, sorting long sections by `v`.
 """
 function assemble_channels(raw::Matrix{Float64}, channels::Vector{ChannelDef}, refline::ReferenceLineParams)
     nu = size(raw, 1)

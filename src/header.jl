@@ -2,11 +2,7 @@
 """
     find_header_end(bytes) -> Int
 
-Return the 1-based byte index of the first character after the header's
-terminating `\$\$...` line (2+ leading `\$` characters).  
-
-This is where the road-data payload begins. 
-Returns `length(bytes) + 1` if no such line is found (header-only file).
+Return the byte index just after the header's terminating `\$\$` line.
 """
 function find_header_end(bytes::Vector{UInt8})
     pos, n = 1, length(bytes)
@@ -25,7 +21,7 @@ end
 """
     split_lines(bytes) -> Vector{String}
 
-Split raw bytes into LF-terminated lines (tolerating a preceding CR).
+Split raw bytes into lines, tolerating CRLF.
 """
 function split_lines(bytes::AbstractVector{UInt8})
     lines = String[]
@@ -43,7 +39,7 @@ end
 """
     strip_inline_comment(line) -> String
 
-Remove a `!` inline comment (everything from the first `!` onward).
+Remove a trailing `!` inline comment.
 """
 function strip_inline_comment(line::AbstractString)
     idx = findfirst('!', line)
@@ -51,7 +47,11 @@ function strip_inline_comment(line::AbstractString)
     return line[1:prevind(line, idx)]
 end
 
-"""Is `line`'s first non-space character `*` (a whole-line comment)?"""
+"""
+    is_block_comment(line) -> Bool
+
+Whether `line` is a whole-line `*` comment.
+"""
 function is_block_comment(line::AbstractString)
     s = lstrip(line)
     return !isempty(s) && s[1] == '*'
@@ -60,12 +60,7 @@ end
 """
     section_marker(line) -> Union{String,Nothing}
 
-Returns `nothing` if `line` isn't a section marker; 
-otherwise the upper-cased keyword (empty string for a bare `\$` section-end marker). 
-
-A trailing inline (`!`) comment on the marker line itself — e.g. `\$ROAD_CRG ! crg road
-parameters`, seen in real vendored fixtures, is stripped first, the same
-way it already is for ordinary content lines.
+Upper-cased section keyword of a `\$` marker line, or `nothing`.
 """
 function section_marker(line::AbstractString)
     (isempty(line) || line[1] != '$') && return nothing
@@ -75,9 +70,7 @@ end
 """
     group_sections(header_lines) -> Dict{String,Vector{String}}
 
-Group header lines into sections keyed by keyword (e.g. `"ROAD_CRG"`),
-stripping block (`*`) and inline (`!`) comments and blank lines. A bare `\$`
-line closes the current section without opening a new one.
+Group comment-stripped header lines by section keyword.
 """
 function group_sections(header_lines::Vector{String})
     sections = Dict{String,Vector{String}}()
@@ -104,10 +97,7 @@ end
 """
     parse_keyvalues(lines) -> Dict{String,Float64}
 
-Parse `KEY = value` lines into a dict keyed by upper-cased key. 
-
-Lines whose value doesn't parse as a float are skipped 
-(see `parse_keyvalue_strings` for sections that mix numeric and string fields).
+Parse numeric `KEY = value` lines into a dict keyed by upper-cased key.
 """
 function parse_keyvalues(lines::Vector{String})
     dict = Dict{String,Float64}()
@@ -124,7 +114,7 @@ end
 """
     parse_keyvalue_strings(lines) -> Dict{String,String}
 
-Like `parse_keyvalues` but keeps every value as a raw string.
+Like `parse_keyvalues`, but keep values as strings.
 """
 function parse_keyvalue_strings(lines::Vector{String})
     dict = Dict{String,String}()
@@ -138,11 +128,11 @@ function parse_keyvalue_strings(lines::Vector{String})
 end
 
 """
-Reference-line and long-section parameters from `\$ROAD_CRG`.
+    ReferenceLineParams
 
-Optional fields (anchoring end position/heading/elevation, explicit constant
-slope/banking) are `Union{Float64,Nothing}`, defaulting to `nothing`
-except where the spec gives a numeric default (slope/banking default 0.0).
+Reference-line and long-section parameters from `\$ROAD_CRG`. Fields follow the
+`REFERENCE_LINE_*` (`_S` = slope, `_B` = banking) and `LONG_SECTION_V_*` keys;
+optional end values are `nothing` when absent.
 """
 struct ReferenceLineParams
     start_u::Float64
@@ -168,12 +158,7 @@ end
 """
     parse_road_crg(lines) -> ReferenceLineParams
 
-Parse `\$ROAD_CRG` section lines into a `ReferenceLineParams`. Deliberately
-does NOT extract `REFERENCE_LINE_START_LON`/`_LAT`/`_ALT` or the
-corresponding `_END_*` geodetic fields (present in some real files, e.g.
-`belgian_block.crg`) — placing the road on a real-world map is
-`\$ROAD_CRG_MPRO`'s job (geospatial projection metadata), which this
-package parses but never applies; see the design doc.
+Parse `\$ROAD_CRG` lines into a `ReferenceLineParams`.
 """
 function parse_road_crg(lines::Vector{String})
     d = parse_keyvalues(lines)
@@ -191,12 +176,10 @@ function parse_road_crg(lines::Vector{String})
 end
 
 """
-One `D:` channel from `\$KD_DEFINITION`. `v`/`index` are only set for
-`kind == :long_section`, in the position-form / index-form respectively
-(mutually exclusive — see `parse_kd_definition`). `U:` (virtual) channels
-are discarded entirely during parsing and never produce a `ChannelDef`,
-matching the reference implementation's `decodeIndependent`, which is a
-documented no-op.
+    ChannelDef
+
+One `D:` channel from `\$KD_DEFINITION`: `kind` (`:phi`, `:banking`, `:slope` or
+`:long_section`), plus a long section's `v` (position form) or `index` (index form).
 """
 struct ChannelDef
     kind::Symbol   # :phi, :banking, :slope, :long_section
@@ -209,10 +192,7 @@ const CRG_FORMAT_CODES = Dict("LRFI"=>:LRFI, "LDFI"=>:LDFI, "KRBI"=>:KRBI, "KDBI
 """
     parse_kd_definition(lines) -> (format_code::Symbol, channels::Vector{ChannelDef})
 
-Parse the `#:` format-code line (default `:KRBI` if absent, per spec) and
-`D:` channel lines, in declaration order. `D:long section at v = X,unit`
-(position-form) and `D:long section N,unit` (index-form) cannot be mixed in
-one file — the reference loader treats that as fatal, and so do we.
+Parse `\$KD_DEFINITION` into `(format_code, channels)`.
 """
 function parse_kd_definition(lines::Vector{String})
     format_code = :KRBI
@@ -261,14 +241,7 @@ end
 """
     v_axis(channels, refline) -> Vector{Float64}
 
-The v-coordinate for each `:long_section` channel, in declaration order.
-Index-form derives a uniform axis from `LONG_SECTION_V_RIGHT/_LEFT/_INCREMENT`;
-position-form reads each channel's own parsed `v` directly (including truly
-non-uniform spacing — unlike the reference C implementation, which snaps
-near-uniform spacings and leaves a genuinely non-uniform axis in a code path
-its own authors flag as possibly incomplete, we don't need to worry about
-this at all: OpenCRG.jl does no interpolation itself, so non-uniform v is
-just data, not a numerical hazard).
+Lateral position of each long-section channel, in declaration order.
 """
 function v_axis(channels::Vector{ChannelDef}, refline::ReferenceLineParams)
     long_sections = filter(c -> c.kind == :long_section, channels)
@@ -288,10 +261,9 @@ function v_axis(channels::Vector{ChannelDef}, refline::ReferenceLineParams)
 end
 
 """
-Every field from `\$ROAD_CRG_MODS`. All optional (`nothing` if absent from
-the file) — `nothing` here means "not present," which matters: e.g.
-`has_refpoint` in `apply_mods` checks presence of *any*
-`refpoint_*` field, not whether it's zero.
+    RoadCrgMods
+
+Modifiers from `\$ROAD_CRG_MODS`, one field per key (lower-cased); absent entries are `nothing`.
 """
 Base.@kwdef struct RoadCrgMods
     scale_z_grid::Union{Float64,Nothing} = nothing
@@ -323,7 +295,7 @@ end
 """
     parse_road_crg_mods(lines) -> RoadCrgMods
 
-Parse `\$ROAD_CRG_MODS` section lines into a `RoadCrgMods`.
+Parse `\$ROAD_CRG_MODS` lines into a `RoadCrgMods`.
 """
 function parse_road_crg_mods(lines::Vector{String})
     d = parse_keyvalues(lines)

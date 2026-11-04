@@ -1,24 +1,14 @@
 """
     LibOpenCRG
 
-Wrapper around the upstream ASAM OpenCRG C reference library (via
-`OpenCRG_jll`) with an interface modelled on the pure-Julia `OpenCRG.jl`
-(`read_crg`, `CRGData`, `road_surface_grid`), plus the point evaluation
-functions the C library provides and the pure-Julia package does not
-(`uv2xy`, `xy2uv`, `uv2z`, `xy2z`, `uv2pk`, `xy2pk`).
-
-Native resources are released automatically by finalizers (which never block:
-if the library is busy on another thread the release is retried at a later GC),
-or deterministically with [`close`](@ref) or the do-block form of [`read_crg`](@ref).
-
-The raw `ccall` layer is available as the submodule [`LibOpenCRG.C`](@ref).
+Wrapper around the ASAM OpenCRG C library (via `OpenCRG_jll`) with the same
+interface as `OpenCRG.jl` (`read_crg`, `CRGData`, `road_surface_grid`), plus
+point evaluation (`uv2xy`, `xy2uv`, `uv2z`, `xy2z`, `uv2pk`, `xy2pk`).
+The raw `ccall` layer is the submodule [`LibOpenCRG.C`](@ref).
 
 !!! note
-    `read_crg`, `CRGData` and `road_surface_grid` share names with
-    `OpenCRG.jl`'s exports but are different types/functions. If you load both
-    packages, qualify the names (`OpenCRG.read_crg`, `LibOpenCRG.read_crg`).
-    The C library has global state and is not thread-safe; all calls made
-    through this module are serialized with a lock.
+    These names clash with `OpenCRG.jl`'s exports; qualify them if you load both.
+    Calls into the (non-thread-safe) C library are serialized with a lock.
 """
 module LibOpenCRG
 
@@ -34,9 +24,7 @@ const LOCK = ReentrantLock()
 """
     set_message_level(level::Integer)
 
-Set the C library's message verbosity (0 = none ... 5 = debug; 2 = warnings
-and above). `LibOpenCRG` sets level 2 when loaded, since the library is very
-chatty at its default level.
+Set the C library's message verbosity (0 = none ... 5 = debug). Defaults to 2 (warnings) on load.
 """
 set_message_level(level::Integer) = lock(() -> C.crgMsgSetLevel(level), LOCK)
 
@@ -47,10 +35,8 @@ end
 """
     CRGData
 
-A CRG road loaded by the C library: a data set handle plus one contact point
-used for evaluation. Create with [`read_crg`](@ref). Released automatically
-when garbage collected, or explicitly with `close(data)`; using a closed
-`CRGData` throws an `ArgumentError`.
+A road loaded by the C library with [`read_crg`](@ref). Released on garbage
+collection or with `close(data)`; using a closed `CRGData` throws an `ArgumentError`.
 """
 mutable struct CRGData
     path::String
@@ -128,15 +114,12 @@ end
     read_crg(path) -> CRGData
     read_crg(f, path)
 
-Load the `.crg` file at `path` with the C library and check it for
-consistency. Throws on a missing file, a file the library cannot parse, or a
-failed consistency check.
-
-The second form calls `f(data)`, and releases the native resources when `f`
-returns or throws, returning the result of `f`:
+Load and consistency-check the `.crg` file at `path` with the C library.
+Throws if the file is missing, cannot be parsed, or fails the check.
+The second form returns `f(data)` and closes `data` afterwards.
 
 ```julia
-read_crg("road.crg") do data
+z = read_crg("road.crg") do data
     uv2z(data, 10.0, 0.0)
 end
 ```
@@ -234,71 +217,55 @@ end
 """
     uv2xy(data, u, v) -> (x, y)
 
-World coordinates of the road-frame point `(u, v)`. **Does not return `NaN`
-outside the road**: the C library extrapolates the reference line beyond the
-`u` range and the lateral offset beyond the `v` range, so out-of-domain points
-map to extrapolated world coordinates. `(NaN, NaN)` is returned only if the C
-library reports failure.
+World coordinates of road-frame `(u, v)`. Points outside the road are
+extrapolated, not `NaN`; `NaN`s only if the C library fails.
 """
 uv2xy(d::CRGData, u::Real, v::Real) = _eval(C.crgEvaluv2xy, d, u, v, Val(2))
 
 """
     xy2uv(data, x, y) -> (u, v)
 
-Road-frame coordinates of the world point `(x, y)`. **Does not return `NaN`
-outside the road**: points off the road are extrapolated like [`uv2xy`](@ref)
-(so the returned `(u, v)` may lie outside [`urange`](@ref)/[`vrange`](@ref)).
-`(NaN, NaN)` is returned only if the C library reports failure.
+Road-frame coordinates of world `(x, y)`. Off-road points are extrapolated like
+[`uv2xy`](@ref), so the result may lie outside [`urange`](@ref)/[`vrange`](@ref).
 """
 xy2uv(d::CRGData, x::Real, y::Real) = _eval(C.crgEvalxy2uv, d, x, y, Val(2))
 
 """
     uv2z(data, u, v) -> z
 
-Bilinearly interpolated elevation at road-frame `(u, v)`. Outside the grid the
-C library clamps to the nearest edge values rather than returning `NaN`;
-`NaN` is returned for undefined (NaN) grid cells, which can include edge
-cells reached from outside the road.
+Bilinearly interpolated elevation (m) at road-frame `(u, v)`. Clamps to the
+grid edge outside the road; `NaN` for undefined grid cells.
 """
 uv2z(d::CRGData, u::Real, v::Real) = only(_eval(C.crgEvaluv2z, d, u, v, Val(1)))
 
 """
     xy2z(data, x, y) -> z
 
-Bilinearly interpolated elevation at world `(x, y)`; same out-of-domain
-behaviour as [`uv2z`](@ref) (clamped to the edge, `NaN` only for undefined grid cells).
+Elevation (m) at world `(x, y)`; same out-of-road behaviour as [`uv2z`](@ref).
 """
 xy2z(d::CRGData, x::Real, y::Real) = only(_eval(C.crgEvalxy2z, d, x, y, Val(1)))
 
 """
     uv2pk(data, u, v) -> (heading, curvature)
 
-Heading (rad) and curvature (1/m) at road-frame `(u, v)`. Outside the `u`
-range the values are those of the extrapolated reference line (heading and
-curvature of the end, or 0 before the start); `NaN`s only if the C library
-reports failure.
+Heading (rad) and curvature (1/m) at road-frame `(u, v)`, from the
+extrapolated reference line outside the `u` range.
 """
 uv2pk(d::CRGData, u::Real, v::Real) = _eval(C.crgEvaluv2pk, d, u, v, Val(2))
 
 """
     xy2pk(data, x, y) -> (heading, curvature)
 
-Heading (rad) and curvature (1/m) at world `(x, y)`; same out-of-domain
-behaviour as [`uv2pk`](@ref).
+Heading (rad) and curvature (1/m) at world `(x, y)`; see [`uv2pk`](@ref).
 """
 xy2pk(d::CRGData, x::Real, y::Real) = _eval(C.crgEvalxy2pk, d, x, y, Val(2))
 
 """
     road_surface_grid(data) -> (u, v, X, Y, Z)
 
-World-frame grids of the road surface, matching `OpenCRG.road_surface_grid`:
-`u` and `v` are the grid coordinate vectors and `X`, `Y`, `Z` have size
-`(length(u), length(v))`. Nodes the C library reports as undefined are `NaN`.
-
-`u` runs over the data set's range with its native increment; `v` is
-reconstructed from the lateral range and increment, so roads with
-non-uniform (explicit) `v` sections (reported increment `dv == 0`) are not
-supported and throw an error.
+World-frame road surface grids, as in `OpenCRG.road_surface_grid`: axis vectors
+`u`, `v` and `(length(u), length(v))` matrices `X`, `Y`, `Z`, `NaN` where undefined.
+Throws an error for roads with non-uniform `v` sections.
 """
 function road_surface_grid(d::CRGData)
     umin, umax = urange(d)

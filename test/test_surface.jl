@@ -58,8 +58,11 @@ end
 end
 
 @testset "exactly one of END_X/END_Y is an error" begin
-    path = edited("synthetic_end_anchored.crg", r"REFERENCE_LINE_END_Y.*\n" => "")
-    @test_throws Exception road_surface_grid(read_crg(path))
+    msg = "REFERENCE_LINE_END_X/END_Y must both be set or both be absent, not just one"
+    for drop in (r"REFERENCE_LINE_END_Y.*\n", r"REFERENCE_LINE_END_X.*\n")
+        path = edited("synthetic_end_anchored.crg", drop => "")
+        @test_throws ErrorException(msg) road_surface_grid(read_crg(path))
+    end
 end
 
 @testset "hairpin collapses onto the reference line" begin

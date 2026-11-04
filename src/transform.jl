@@ -9,10 +9,7 @@ function integrate_reference_line(refline::ReferenceLineParams, phi::Vector{Floa
     du = refline.increment
     x, y = Vector{Float64}(undef, nu), Vector{Float64}(undef, nu)
     x[1], y[1] = refline.start_x, refline.start_y
-    has_end_x, has_end_y = refline.end_x !== nothing, refline.end_y !== nothing
-    xor(has_end_x, has_end_y) &&
-        error("REFERENCE_LINE_END_X/END_Y must both be set or both be absent, not just one")
-    if !has_end_x && !has_end_y
+    if refline.end_x === nothing && refline.end_y === nothing
         for i in 1:nu-1
             x[i+1] = x[i] + du * cos(phi[i+1])
             y[i+1] = y[i] + du * sin(phi[i+1])
@@ -144,6 +141,8 @@ Throws an error for the unsupported `REFPOINT_*` cases listed in [`road_surface_
 function apply_mods(data::CRGData)
     mods = data.mods
     r = data.refline
+    xor(r.end_x === nothing, r.end_y === nothing) &&
+        error("REFERENCE_LINE_END_X/END_Y must both be set or both be absent, not just one")
     phi = copy(data.phi)
     z = copy(data.z)
     slope = data.slope === nothing ? nothing : copy(data.slope)
@@ -230,8 +229,7 @@ function apply_mods(data::CRGData)
         # elevation, banking excluded since it's multiplied by v=0 -- not the
         # reference-line elevation alone, and this happens whenever ANY of
         # REFPOINT_X/Y/Z/PHI triggers this branch, not only when REFPOINT_Z
-        # itself is set (cross-validated; see the docstring and
-        # test_transform.jl's "REFPOINT_Z" testset).
+        # itself is set (cross-validated; see the docstring).
         v0_idx = findfirst(==(0.0), v)
         v0_idx === nothing && error("apply_mods: REFPOINT_X/Y/Z/PHI need the elevation at the default " *
               "anchor's v=0, which requires an exact v=0 declared long-section column -- this package " *

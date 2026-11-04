@@ -287,7 +287,7 @@ end
 """
 Every field from `\$ROAD_CRG_MODS`. All optional (`nothing` if absent from
 the file) — `nothing` here means "not present," which matters: e.g.
-`has_refpoint` in `apply_mods` (Task 16) checks presence of *any*
+`has_refpoint` in `apply_mods` checks presence of *any*
 `refpoint_*` field, not whether it's zero.
 """
 Base.@kwdef struct RoadCrgMods

@@ -427,7 +427,7 @@ end
     crgDataSetModifiersApply(dataSetId) -> Nothing
 
 Apply all currently-set modifiers to the data set. Modifiers are **not**
-cleared afterward (verified empirically during Task 15's review: calling
+cleared afterward (verified empirically: calling
 this twice in a row on the same data set with no intervening
 `crgDataSetModifierRemoveAll` applies the same offset twice) -- call
 `crgDataSetModifierRemoveAll` first if you need a clean slate before the

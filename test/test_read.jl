@@ -58,3 +58,16 @@ const DATA = joinpath(@__DIR__, "data")
         end
     end
 end
+
+@testset "comment display" begin
+    fixture = read_crg(joinpath(DATA, "belgian_block.crg"))
+    @test occursin('\n', fixture.comment)
+    displayed = sprint(show, MIME("text/plain"), fixture)
+    @test occursin("Comment: \"% See the NOTICE", displayed)
+    @test !occursin("***", displayed)
+    for (text, width, expected) in (("% ***\n -- == \n  Road description\nSecond line", 80, "\"Road description\""),
+                             ("% *-= \n\n", 80, "\"\""),
+                             ("\n  αβγδε\nother", 3, "\"αβγ…\""))
+        @test sprint(io -> OpenCRG._show_comment(io, text, width)) == expected
+    end
+end

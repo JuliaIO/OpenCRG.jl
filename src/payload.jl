@@ -38,14 +38,14 @@ end
 
 Decode `nchannels`-wide ASCII payload rows (`:LRFI`: 10-char fields,
 8/record; `:LDFI`: 20-char fields, 4/record). The row count `nu` is
-DERIVED as `length(payload_lines) ÷ lines_per_row` — see the note in Task
-7 above for why this can't come from `\$ROAD_CRG`'s `start_u`/`end_u`. It's
+DERIVED as `length(payload_lines) ÷ lines_per_row`, rather than from
+`\$ROAD_CRG`'s `start_u`/`end_u`. It's
 an error for the payload to have a number of lines that isn't a whole
 multiple of `lines_per_row` — silently floor-dividing would quietly drop a
 truncated/corrupted file's leftover partial row instead of surfacing it.
 Each row always starts on a fresh line — per spec §6.4.8, plain-text rows
 never pack a previous row's leftover fields onto the same line, unlike
-binary (Task 8).
+binary.
 """
 function decode_ascii_payload(payload_lines::Vector{<:AbstractString}, format_code::Symbol, nchannels::Int)
     width = ASCII_FIELD_WIDTH[format_code]
@@ -88,7 +88,7 @@ Decode `nchannels`-wide big-endian binary payload rows (`Float32` for
 division, `length(payload) ÷ (nchannels * sizeof(elem))` — trailing padding
 bytes (the payload is padded to a multiple of 80 bytes overall, per spec)
 are simply leftover and ignored, for the same reason `decode_ascii_payload`
-(Task 7) derives its row count from the payload rather than trusting
+derives its row count from the payload rather than trusting
 `\$ROAD_CRG`'s `start_u`/`end_u`. **Rows are packed tightly with no per-row
 padding or alignment** — unlike ASCII, binary row stride is exactly
 `nchannels * sizeof(elem)` bytes; only the very last record of the *entire*
@@ -103,7 +103,7 @@ matching the reference decoder's plain `isnan()` check.
 The leftover remainder after floor division must be less than 80 bytes (the
 spec's end-of-payload padding quantum) — anything bigger means a truncated
 or corrupted file is silently dropping most of a real row, the same
-truncation risk `decode_ascii_payload` (Task 7) guards against.
+truncation risk `decode_ascii_payload` guards against.
 """
 function decode_binary_payload(payload::AbstractVector{UInt8}, format_code::Symbol, nchannels::Int)
     format_code == :KRBI && return decode_binary_payload_typed(payload, Float32, nchannels)
@@ -142,10 +142,10 @@ heading.
 Requires at least one `:long_section` channel — a CRG file with none would
 have no elevation data at all, which is caught here rather than silently
 producing an empty `(nu, 0)` z-matrix that would only fail confusingly much
-later (in Task 11+). If no `:phi` channel is declared at all (both vendored
+later during integration. If no `:phi` channel is declared at all (both vendored
 fixtures always declare one, so this is untested against real data),
 `phi` stays `fill(NaN, nu)` except for the row-1 placeholder overwrite —
-deliberately NOT an error, since NaN already poisons Task 11's integration
+deliberately NOT an error, since NaN already poisons reference-line integration
 loudly rather than silently defaulting to a fabricated straight/`phi=0`
 road.
 """

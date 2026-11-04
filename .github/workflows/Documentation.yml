@@ -29,5 +29,5 @@ jobs:
         run: julia --project=docs --code-coverage=none docs/make.jl
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional; see the deploy-key notes in the PR description.
+          # DOCUMENTER_KEY is an SSH deploy key, so tag pushes from TagBot trigger docs builds.
           DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}

@@ -5,7 +5,7 @@ describe road surfaces as a *curved regular grid*: a reference line (position an
 heading as a function of the distance `u` along the road) plus a regular grid of
 elevations `z` over the lateral offset `v` from that line. OpenCRG.jl is a
 pure-Julia reader for these files: it parses the header, decodes the ASCII and
-binary payloads, applies the `\$ROAD_CRG_MODS` modifiers and integrates the
+binary payloads, applies the `$ROAD_CRG_MODS` modifiers and integrates the
 reference line into world-frame `(X, Y, Z)` grids. No C library is needed.
 
 ```julia
@@ -82,4 +82,4 @@ Evaluate inside the grid (`u` in `extrema(u)`, `v` in `extrema(v)`).
 `REFPOINT_U`, `REFPOINT_V` and their `_FRACTION` variants are not supported
 (an error is thrown), `REFPOINT_X/Y/Z/PHI` need an exact `v = 0` long-section
 column, `GRID_NAN_MODE`/`GRID_NAN_OFFSET` are parsed but ignored (NaN cells are
-not filled), and `\$ROAD_CRG_OPTS`/`\$ROAD_CRG_MPRO` have no effect.
+not filled), and `$ROAD_CRG_OPTS`/`$ROAD_CRG_MPRO` have no effect.

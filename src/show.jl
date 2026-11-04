@@ -4,7 +4,22 @@ function _show_comment(io::IO, text::String, width::Int)
     print(io, '"')
     started = false
     count = 0
-    for c in text
+    # Keep line boundaries so decorative header rules can be skipped without
+    # discarding the original comment or constructing surface data.
+    line_start = firstindex(text)
+    meaningful = false
+    for i in eachindex(text)
+        c = text[i]
+        if c == '\n' || c == '\r'
+            meaningful && break
+            line_start = nextind(text, i)
+        elseif !(isspace(c) || c == '*' || c == '%' || c == '-' || c == '=')
+            meaningful = true
+        end
+    end
+    for i in eachindex(text)
+        (!meaningful || i < line_start) && continue
+        c = text[i]
         if c == '\n' || c == '\r'
             started && break
             continue

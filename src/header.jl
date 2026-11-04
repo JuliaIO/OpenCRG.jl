@@ -3,9 +3,10 @@
     find_header_end(bytes) -> Int
 
 Return the 1-based byte index of the first character after the header's
-terminating `\$\$...` line (2+ leading `\$` characters) — i.e. where the
-road-data payload begins. Returns `length(bytes) + 1` if no such line is
-found (header-only file).
+terminating `\$\$...` line (2+ leading `\$` characters).  
+
+This is where the road-data payload begins. 
+Returns `length(bytes) + 1` if no such line is found (header-only file).
 """
 function find_header_end(bytes::Vector{UInt8})
     pos, n = 1, length(bytes)
@@ -59,12 +60,12 @@ end
 """
     section_marker(line) -> Union{String,Nothing}
 
-`nothing` if `line` isn't a section marker; otherwise the upper-cased
-keyword (empty string for a bare `\$` section-end marker). A trailing
-inline (`!`) comment on the marker line itself — e.g. `\$ROAD_CRG ! crg road
-parameters`, seen in real vendored fixtures — is stripped first, the same
-way it already is for ordinary content lines; otherwise the comment text
-would leak into the keyword and no section would ever be found by name.
+Returns `nothing` if `line` isn't a section marker; 
+otherwise the upper-cased keyword (empty string for a bare `\$` section-end marker). 
+
+A trailing inline (`!`) comment on the marker line itself — e.g. `\$ROAD_CRG ! crg road
+parameters`, seen in real vendored fixtures, is stripped first, the same
+way it already is for ordinary content lines.
 """
 function section_marker(line::AbstractString)
     (isempty(line) || line[1] != '$') && return nothing
@@ -103,9 +104,10 @@ end
 """
     parse_keyvalues(lines) -> Dict{String,Float64}
 
-Parse `KEY = value` lines into a dict keyed by upper-cased key. Lines whose
-value doesn't parse as a float are skipped (see `parse_keyvalue_strings` for
-sections that mix numeric and string fields).
+Parse `KEY = value` lines into a dict keyed by upper-cased key. 
+
+Lines whose value doesn't parse as a float are skipped 
+(see `parse_keyvalue_strings` for sections that mix numeric and string fields).
 """
 function parse_keyvalues(lines::Vector{String})
     dict = Dict{String,Float64}()
@@ -136,8 +138,9 @@ function parse_keyvalue_strings(lines::Vector{String})
 end
 
 """
-Reference-line and long-section parameters from `\$ROAD_CRG`. Optional
-fields (anchoring end position/heading/elevation, explicit constant
+Reference-line and long-section parameters from `\$ROAD_CRG`.
+
+Optional fields (anchoring end position/heading/elevation, explicit constant
 slope/banking) are `Union{Float64,Nothing}`, defaulting to `nothing`
 except where the spec gives a numeric default (slope/banking default 0.0).
 """

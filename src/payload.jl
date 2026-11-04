@@ -7,19 +7,19 @@ const FIELDS_PER_RECORD = Dict(:LRFI => 8, :LDFI => 4, :KRBI => 20, :KDBI => 10)
 
 Decode one fixed-width ASCII field, exactly as sliced from the payload line
 — NOT pre-stripped by the caller, since the exact-width comparison below
-depends on seeing any trailing padding. The literal 10-character content
-`**unused**`, compared against the RAW (unstripped) field, decodes to `0.0`.
-This quirk structurally cannot apply to LDFI's 20-character fields: a
-20-byte raw field can never string-equal the 10-character literal (their
-lengths differ), so it always falls through to the numeric path below —
-matching the reference C decoder's `strcmp` check, which compares the full
-fixed-width buffer, not a pre-trimmed one. (An earlier version of this
-function had the caller `strip` before calling it, which silently broke
-this width-sensitivity — a stripped 20-char `"**unused**"` + padding
-collapses to the bare 10-character literal and would incorrectly match.)
+depends on seeing any trailing padding. 
+
+The literal 10-character content `**unused**`, compared against the RAW 
+(unstripped) field, decodes to `0.0`. This quirk structurally cannot apply 
+to LDFI's 20-character fields: a 20-byte raw field can never string-equal 
+the 10-character literal (their lengths differ), so it always falls through 
+to the numeric path below — matching the reference C decoder's `strcmp` check, 
+which compares the full fixed-width buffer, not a pre-trimmed one.
+
 Once the exact-unused check fails, the field is `strip`ped and parsed as a
 float; any character outside `0123456789+-.eEdD` after stripping decodes to
 NaN (word-agnostic: `*missing*`, `*none*`, etc. all become NaN).
+
 Fortran-style `D`/`d` exponent markers are normalized to `e` before `parse`.
 """
 function decode_ascii_field(raw::AbstractString)

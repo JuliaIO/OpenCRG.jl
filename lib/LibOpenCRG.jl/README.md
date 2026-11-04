@@ -19,22 +19,29 @@ Pkg.add("LibOpenCRG")
 
 ## Main function
 
-`read_crg(path)` loads a file and returns a `CRGData` handle to the C library's
-data set. Use `read_crg(f, path)` to release it on exit, or call `close(data)`.
+`read_crg(path)` loads a file and returns a `CRGData` handle holding all data
+from that file. Use `read_crg(f, path)` to release it on exit, or call `close(data)`.
+
+`road_surface_grid(data)` turns that into a grid `(u, v, X, Y, Z)`. Here, `u`
+and `v` are vectors of along-track and across-track distance, respectively.
+`X`, `Y`, `Z` are matrices of size `(length(u), length(v))` that together define
+Cartesian positions of the surface of the road.
+
+Positive `v` points left and negative `v` right, looking in the direction of
+increasing `u`.
+
 Handles are also released by finalizers; the C library is not thread-safe, so
 calls are serialized with a lock, and finalizers never block.
 
 ## Quick start
 
-Also needs `Pkg.add("DataInterpolations")` for the spline step. `u` and `v` are
-the distances along and across the track, `x`, `y`, `z` Cartesian world
-coordinates. The grid can be handed to any interpolation package, like
+Also needs `Pkg.add("DataInterpolationsND")` to interpolate the surface directly.
+The grid can be handed to an interpolation package, like
 [Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl) or
-[DataInterpolationsND.jl](https://github.com/SciML/DataInterpolationsND.jl);
-here a 1D slice goes to [DataInterpolations.jl](https://github.com/SciML/DataInterpolations.jl):
+[DataInterpolationsND.jl](https://github.com/SciML/DataInterpolationsND.jl).
 
 ```julia
-using LibOpenCRG, DataInterpolations
+using LibOpenCRG, DataInterpolationsND
 
 read_crg(joinpath(pkgdir(LibOpenCRG), "test", "data", "handmade_curved_banked_sloped.crg")) do data
     urange(data)                  # (0.0, 22.0)
@@ -42,10 +49,10 @@ read_crg(joinpath(pkgdir(LibOpenCRG), "test", "data", "handmade_curved_banked_sl
     u, v = xy2uv(data, x, y)      # world -> road frame: (10.0, 0.5)
     uv2z(data, u, v)              # elevation: 0.561...
     uv2pk(data, u, v)             # heading, curvature: (0.099, 0.0110...)
-    # u, v: along- and across-track distance; X, Y, Z: Cartesian world coordinates
-    u, v, X, Y, Z = road_surface_grid(data)  # as in OpenCRG.jl
-    j = findfirst(==(0.0), v)     # centre-line column
-    CubicSpline(Z[:, j], u)(10.5) # elevation along the road
+    u, v, X, Y, Z = road_surface_grid(data)
+    dimensions = (LinearInterpolationDimension(u), LinearInterpolationDimension(v))
+    surface = NDInterpolation(cat(X, Y, Z; dims = 3), dimensions)
+    surface(10.5, 0.5)           # Cartesian [x, y, z] between grid nodes
 end
 ```
 
@@ -58,3 +65,7 @@ outside the road rather than failing.
 MIT. The sample files in `test/data` come from upstream
 [asam-ev/OpenCRG](https://github.com/asam-ev/OpenCRG) and are Apache-2.0
 (see `test/data/LICENSE-APACHE-2.0` and `test/data/NOTICE`).
+
+## Acknowledgement
+
+This package was written with the help of generative AI.

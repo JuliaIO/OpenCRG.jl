@@ -11,7 +11,7 @@ reference line into world-frame `(X, Y, Z)` grids. No C library is needed.
 ```julia
 using Pkg
 Pkg.add("OpenCRG")
-Pkg.add("DataInterpolations")
+Pkg.add("DataInterpolationsND")
 ```
 
 ## Walkthrough
@@ -22,79 +22,60 @@ banked and sloped road).
 
 ### Load a file
 
-[`read_crg`](@ref OpenCRG.read_crg) parses the file into a [`CRGData`](@ref OpenCRG.CRGData):
+[`read_crg`](@ref OpenCRG.read_crg) parses a file and returns a
+[`CRGData`](@ref OpenCRG.CRGData) holding all data from that file:
 
 ```@example walkthrough
 using OpenCRG
-using DataInterpolations
+using DataInterpolationsND
 
 path = joinpath(pkgdir(OpenCRG), "test", "data", "handmade_curved_banked_sloped.crg")
-data = OpenCRG.read_crg(path);
-```
-
-It holds the header (`data.refline`, `data.mods`, ...), the per-`u` channels
-(`data.phi` heading, `data.banking`, `data.slope`) and the elevation grid
-`data.z` with its lateral axis `data.v`:
-
-```@example walkthrough
-(data.refline.start_u, data.refline.end_u, data.refline.increment)
-```
-
-```@example walkthrough
-(size(data.z), data.v)
+data = OpenCRG.read_crg(path)
 ```
 
 ### Evaluate the surface on a grid
 
 [`road_surface_grid`](@ref OpenCRG.road_surface_grid) applies the modifiers,
-integrates the reference line and returns the world-frame grids; `X`, `Y`
-and `Z` have size `(length(u), length(v))`:
+integrates the reference line and returns a grid `(u, v, X, Y, Z)`.
+
+Here, `u` and `v` are vectors of along-track and across-track distance,
+respectively. `X`, `Y`, `Z` are matrices of size `(length(u), length(v))` that
+together define Cartesian positions of the surface of the road.
+
+Positive `v` points left and negative `v` right, looking in the direction of
+increasing `u`. Undefined cells are `NaN`.
 
 ```@example walkthrough
 u, v, X, Y, Z = OpenCRG.road_surface_grid(data)
 size(Z)
 ```
 
-`u` and `v` are the road-frame coordinates: the distance along the track and
-the distance across it (lateral offset from the reference line). `X`, `Y` and
-`Z` are the Cartesian world-frame coordinates of each `(u, v)` grid node.
+### Interpolate with DataInterpolationsND.jl
 
-### Interpolate with DataInterpolations.jl
-
-OpenCRG.jl only provides the grid. To evaluate it between nodes, hand the
-columns and rows to an interpolation package, like
+OpenCRG.jl only provides the grid. To evaluate it between nodes, use an
+interpolation package, like
 [Interpolations.jl](https://github.com/JuliaMath/Interpolations.jl) or
 [DataInterpolationsND.jl](https://github.com/SciML/DataInterpolationsND.jl).
-The examples below use 1D slices with
-[DataInterpolations.jl](https://docs.sciml.ai/DataInterpolations/stable/).
-Elevation along the reference line (the `v = 0` column):
+Interpolate the complete surface directly over both road-frame axes:
 
 ```@example walkthrough
-j = findfirst(==(0.0), v)
-z_centre = LinearInterpolation(Z[:, j], u)
-z_centre(10.5)
+dimensions = (LinearInterpolationDimension(u), LinearInterpolationDimension(v))
+surface = NDInterpolation(cat(X, Y, Z; dims = 3), dimensions)
+surface(10.5, 0.5)  # Cartesian [x, y, z]
 ```
 
-The world-frame path of the reference line, parametrised by `u`, with a smooth
-spline:
+The same interpolant gives the centre-line position at `u = 10.5` or a point
+across the road at `u = 10`:
 
 ```@example walkthrough
-x_centre = CubicSpline(X[:, j], u)
-y_centre = CubicSpline(Y[:, j], u)
-(x_centre(10.5), y_centre(10.5))
+surface(10.5, 0.0)
 ```
-
-And a cross-section (elevation across the road at `u = 10`):
 
 ```@example walkthrough
-i = findfirst(==(10.0), u)
-z_across = LinearInterpolation(Z[i, :], v)
-z_across(0.5)
+surface(10.0, 0.5)
 ```
 
-Interpolants are only valid inside the grid (`u` in `extrema(u)`, `v` in
-`extrema(v)`); outside it DataInterpolations extrapolates or throws, depending
-on its settings.
+Evaluate inside the grid (`u` in `extrema(u)`, `v` in `extrema(v)`).
 
 ### Restrictions
 

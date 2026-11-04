@@ -2,27 +2,7 @@
 """
     integrate_reference_line(refline, phi) -> (x, y)
 
-Integrate heading `phi` (`phi[i]` = heading of the segment ARRIVING at node
-`i`; `phi[1]` is unused as an arrival heading — it's `REFERENCE_LINE_START_PHI`,
-already substituted in by `assemble_channels`) into world-frame positions,
-replicating `calcRefLine` in the reference implementation's `crgLoader.c`:
-
-- No end position given (`refline.end_x === nothing` AND `refline.end_y ===
-  nothing`): simple forward Euler, `x[i+1] = x[i] + du*cos(phi[i+1])`.
-- Both `end_x`/`end_y` given: integrate backward from the true end point
-  using the same arrival-phi convention, then blend the forward-continuation
-  value with the backward-derived value linearly across the whole line
-  (fraction 0 at the start, 1 at the end) — redistributing integration error
-  instead of leaving it all as a discontinuity at the very end.
-- Exactly one of `end_x`/`end_y` given: an error, not a silent fallback to
-  Case A -- you can't sensibly blend only one of two coordinates, and a real
-  file with only one of the pair set is far more likely to indicate a
-  parsing bug or corruption than genuine spec-compliant data (the ASAM
-  example files always declare both or neither).
-
-`nu == 1` degenerates safely in both cases: the loop ranges become empty
-(`1:0`), so only the start point is ever produced, and `end_x`/`end_y` are
-never read.
+Integrate heading `phi` into reference-line positions `(x, y)`, blending toward the end point if given.
 """
 function integrate_reference_line(refline::ReferenceLineParams, phi::Vector{Float64})
     nu = length(phi)
@@ -56,54 +36,7 @@ end
 """
     integrate_reference_z(refline, slope, nu) -> z_ref
 
-1D analogue of `integrate_reference_line`, integrating longitudinal `slope`
-(dz/du) into a reference-line elevation profile. If there's no `slope`
-channel at all, `refline.start_slope` (default 0.0, from
-`REFERENCE_LINE_START_S`) is used as a constant slope for every step. If
-there's no slope channel AND `start_slope == 0.0`, the reference
-implementation (`calcRefLineZ`) skips integration early — but this does NOT
-mean elevation is zero everywhere. Cross-checked against the real compiled
-C reference library (`crgEvaluv2z`/`crgEvalz.c`): when the ref-z channel is
-invalid, it falls back to adding `channelRefZ.info.first` (i.e.
-`REFERENCE_LINE_START_Z`) at every point, not zero. So a flat road at a
-nonzero elevation (`start_z` set, no slope) must produce a constant
-`start_z` vector, not a constant-zero one — `end_z` is irrelevant in this
-branch (confirmed against the oracle: it's ignored even when set), since
-there's no slope data to integrate toward it anyway.
-
-`nu == 1` degenerates safely (only `z_ref[1] = refline.start_z` is ever
-produced; `end_z` is unused), matching `integrate_reference_line`.
-
-**End-anchored blend fraction is deliberately NOT `i/(nu-1)` by analogy with
-`integrate_reference_line`'s (x,y) blend.**
-`integrate_reference_line`'s blend (`calcRefLine` in
-`crgLoader.c`, ~line 2181-2190) and this function's blend
-(`calcRefLineZ`, ~line 2260-2268) look structurally parallel but are NOT
-numerically identical in the reference C implementation: `calcRefLine` uses
-`fraction = (i+1)/(size-1)` and loops `i` from `0` to `size-2` inclusive
-(so every index from 1 to `size-1`, i.e. including the anchor, gets
-"re-blended" — a no-op there since `fraction=1` at the last step reproduces
-the anchor exactly); `calcRefLineZ` instead uses `fraction = i/(size-1)`
-(the loop variable itself, NOT `i+1`) and loops only up to `size-3`
-inclusive (`i < size-2`), one iteration short of `calcRefLine`'s bound — so
-the very last index (`size-1`) is never revisited by the blend formula at
-all; it keeps the value written directly at the top of the function
-(the true `end_z` anchor). Net effect: at a given target node, `calcRefLineZ`
-uses a fraction ONE NODE "behind" what the symmetric-by-analogy formula
-would give. The one-column fixture
-`synthetic_end_anchored.crg` cannot exercise this branch against the C
-library, which requires at least two long-section columns. The two-column
-fixture `synthetic_end_anchored_2col.crg` permits oracle cross-validation.
-Cross-validating that new fixture's z values against `crgEvaluv2z` surfaced
-a ~0.1-0.15m systematic mismatch at every interior node, which traced
-directly to this fraction/loop-bound discrepancy (verified by hand against
-the disassembled formula above, and confirmed bit-for-bit against the C
-oracle's actual `channelRefZ.data[]` values once ported). Whether this
-asymmetry in the C reference is an intentional design choice or an
-unnoticed bug upstream is unknown and irrelevant here — cross-validating
-against the compiled oracle, not against what "should" be symmetric, is
-this whole package's stated design philosophy, so this function replicates
-`calcRefLineZ` exactly rather than `calcRefLine`'s pattern.
+Integrate `slope` into the reference-line elevation profile, matching the C library's `calcRefLineZ`.
 """
 function integrate_reference_z(refline::ReferenceLineParams, slope::Union{Vector{Float64},Nothing}, nu::Int)
     if slope === nothing && refline.start_slope == 0.0
@@ -141,56 +74,7 @@ end
 """
     lateral_offset_grid(x, y, v) -> (X, Y)
 
-Offset the reference line `(x,y)` laterally by each `v` to build the full
-`(nu, nv)` world-frame grid, replicating the reference implementation's
-"miter normal" scheme (`crgEvaluv2xy.c`) evaluated exactly at grid nodes.
-
-At each INTERIOR node `i`, the true C function (queried continuously between
-nodes) computes an offset point by bisecting the incoming/outgoing segment
-directions via the chord skipping over node `i` (from node `i-1` directly to
-node `i+1`), then rescales that bisector so its projection onto the
-FOLLOWING segment's own normal reproduces the true perpendicular distance
-`v` (a standard "miter join" construction — this is what keeps offset
-polylines from gapping/overlapping at kinks in the reference line). At
-`u = u_i` exactly, only this one node's offset point is used (no
-interpolation between the segment's two endpoints is needed, since
-evaluating exactly at a grid node has interpolation fraction 0). The first
-and last nodes have no bisector partner and fall back to their single
-adjacent segment's own normal.
-
-Perpendicular convention here: `perp(dx, dy) = (-dy, dx)` (90° CCW).
-This convention matches the compiled C oracle on both baseline fixtures.
-The sign of `v` also matters for banking in `assemble_z_grid` and must
-stay consistent with the parsed lateral axis.
-
-Epsilon-guarded degeneracy handling at an exact U-turn / coincident-endpoints
-kink: if node `i-1` and node `i+1` coincide (or nearly so), the
-"chord skipping over node `i`" has ~zero length, which would otherwise send
-`normalize2` to `0/0` and the miter rescale's `denom` toward zero, producing
-`NaN`/`Inf` in `offset_dir[i]` with no warning. This is NOT a purely
-theoretical corner case: `integrate_reference_line`'s non-end-anchored
-branch gives every segment exactly the same length `du` by construction, so
-an exact-180°-hairpin reference line — plausible for a pathological/
-adversarial input, if not a typical recorded track — hits this degenerate
-equal-length configuration by default, not by contrived construction. The
-reference implementation this function transcribes guards against exactly
-this: `crgEvaluv2xy.c`'s `normalizeVector2` (~line 197) returns its input
-UNCHANGED (not normalized) rather than dividing when `length < 1.0e-10`,
-and its rescale step (~line 149) checks `fabs(dotProd) > 1.0e-10` before
-dividing, falling back to the un-rescaled (and, per the previous guard,
-possibly still un-normalized) bisector otherwise. Both thresholds are
-ported verbatim below (`normalize2`/the `abs(denom) > 1.0e-10` check).
-Net effect at an exact hairpin: `offset_dir[i]` ends up as a
-vector with a magnitude on the order of 1e-16 (not exactly `(0.0, 0.0)`
-unless the chord is bit-exactly zero-length) — so the offset point stays
-essentially ON the reference line regardless of `v`, rather than blowing up.
-Confirmed bit-for-bit against the compiled C oracle on a synthetic
-hairpin fixture (`synthetic_hairpin.crg`): at the hairpin node,
-`crgEvaluv2xy` returns `x/y` equal to the reference line's own point there
-(to ~1e-16), for every `v` queried — exactly what this guarded formula
-produces. For bit-exact zero-length chords, the same guard yields a finite
-fallback because `hypot(0.0, 0.0) < 1.0e-10`.
-
+Offset the reference line by each `v` (miter normals, positive left) into `(X, Y)` grids.
 """
 function lateral_offset_grid(x::Vector{Float64}, y::Vector{Float64}, v::Vector{Float64})
     nu = length(x)
@@ -235,50 +119,7 @@ end
 """
     assemble_z_grid(z_grid, z_ref, banking, refline, v) -> Z
 
-`Z[i,j] = z_grid[i,j] + z_ref[i] + bank(i) * clamp(v[j], v[1], v[end])`.
-Banking's lateral reach is clamped to the road's actual v-range regardless
-of what `v` values are being queried — matching `crgEvalz.c`, which clips
-`v` for the banking term specifically (but not for the grid-z lookup
-itself). If there's no `banking` channel, `refline.start_banking` (default
-0.0, from `REFERENCE_LINE_START_B`) is used as a constant cross-slope for
-every row.
-
-**This clamp is a provable no-op on every real call path in this package**
-— `apply_mods` sits between
-`assemble_channels` and this function in `road_surface_grid`'s actual call
-chain (`d = apply_mods(data)`, then `assemble_z_grid(d.z, z_ref, d.banking,
-d.refline, d.v)`). In the C reference, `crgEvaluv2z` (`crgEvalz.c` lines
-~574-588) is a *continuous point-query* evaluator: its query `v` (an
-arbitrary real, e.g. 5.3) is a genuinely different quantity from
-`crgData->channelV.info.first`/`.last` (the channel's own declared, discrete
-v-axis) — so clamping the query to the channel's declared range is real,
-meaningful work. This package has no such split: it's a batched forward
-transform only (see the design doc — "no per-point Newton-iteration
-inversion ... forward-only"), so there is exactly one `v` in play, and
-`assemble_z_grid` is always called with the same `v` its own `z_grid`
-argument's columns correspond to.
-That `v` traces back to `assemble_channels`, which always returns
-`v` sorted ascending (`sortperm`) with `z`'s columns permuted to match --
-but by the time `road_surface_grid` calls `assemble_z_grid`, `apply_mods`
-has had a chance to touch `v` too, via `SCALE_WIDTH`
-(`v .*= mods.scale_width`). A uniform multiplicative rescale by a *positive*
-factor cannot change the relative order of a sorted array, so the
-ascending/matches-`z`'s-columns invariant survives (confirmed by a dedicated
-regression test, `test_transform.jl`'s `"SCALE_WIDTH preserves the
-v-ascending / z-column invariant..."`); this package does not guard against
-a zero or negative `SCALE_WIDTH`, which would violate it — matching the C
-reference, which also does not guard against that case (`crgDataScaleChannel`
-in `crgMgr.c` scales `channelV`'s values unconditionally, with no sign check).
-For any sorted-ascending `v`, `first(v)` and `last(v)` are exactly its min
-and max, so `clamp(v[j], first(v), last(v)) == v[j]` for every `j` — always,
-for any positive-`SCALE_WIDTH`-or-absent call path, not merely by
-observation. The clamp is kept anyway because it's harmless, free, and mirrors
-the upstream
-reference's defensive intent — see `test_transform.jl`'s `assemble_z_grid`
-testset, which pins both (a) this no-op behavior on realistic (sorted) `v`,
-and (b) the clamp's literal arithmetic via a synthetic non-monotonic `v`
-that the real pipeline never produces but which still exercises the
-`clamp(...)` line for regression purposes.
+Combine the raw grid, reference elevation and banking into world `Z`.
 """
 function assemble_z_grid(z_grid::Matrix{Float64}, z_ref::Vector{Float64}, banking::Union{Vector{Float64},Nothing}, refline::ReferenceLineParams, v::Vector{Float64})
     nu, nv = size(z_grid)
@@ -297,117 +138,8 @@ end
 """
     apply_mods(data::CRGData) -> CRGData
 
-Apply `\$ROAD_CRG_MODS`, returning a new `CRGData` with adjusted raw
-channels. Order matches the reference implementation
-(`crgDataSetModifiersApply` in `crgMgr.c`): scale channels first (z-grid,
-slope, banking, length, width, curvature), then a single rotate+translate.
-
-Key insight that keeps this simple: rotating every `phi` value by a
-constant angle rotates the *shape* of the eventually-integrated reference
-line by that same angle, because `(cos(a+θ), sin(a+θ)) = R(θ)·(cos a, sin a)`
-— so only `refline.start_x/start_y` (rotated about the pivot, then
-translated) and `phi` itself need to change here. This holds for the
-`REFPOINT_*` case too: the only anchor point this function supports is the
-implicit default one (`u = start_u`, `v = 0` — see the scope-boundary note
-below), which is exactly `refline.start_x/start_y/start_phi` by
-construction. There's no need to call `integrate_reference_line` inside
-this function at all.
-
-`REFPOINT_*` (if any of `REFPOINT_X/Y/Z/PHI` is set) takes over the
-rotate+translate step entirely, ignoring `REFLINE_OFFSET_*`/
-`REFLINE_ROTCENTER_*` completely — they do not compose, matching
-`crgDataApplyTransformations` in `crgMgr.c`: `applyXform` is set to 1 by
-any of the `dCrgModRefPoint{X,Y,Z,Phi,U,UFrac,V,VFrac}` checks, and the
-whole `REFLINE_OFFSET_*`/`REFLINE_ROTCENTER_*` block is gated behind
-`if (!applyXform)` — i.e. it runs at all only when NONE of those
-`REFPOINT_*` fields were present. Confirmed directly against that source
-(`crgMgr.c` (asam-ev/OpenCRG), `crgDataApplyTransformations`,
-~lines 804-922) rather than assumed.
-
-**Scope boundary for `REFPOINT_*` support:** the `(u,v)` point a
-`REFPOINT_*` modifier pins down is, in general, an arbitrary CONTINUOUS
-point on the road surface — the C reference resolves it via genuine
-point-interpolation (`crgDataEvaluv2xy`/`crgDataEvaluv2z` at the full query
-`(uPos, vPos)`), which this package's design doc explicitly excludes from
-scope (no per-point Newton-iteration inversion, no interpolation/evaluation
-API, forward-only batched grid transform only). Only the ONE anchor that's
-exactly computable without an interpolator is supported here: the IMPLICIT
-DEFAULT point, `u = start_u` (grid node 1), `v = 0` — at which `x, y, phi`
-exactly reproduce `start_x/start_y/start_phi` with no interpolation needed
-(confirmed by "v=0 reproduces the reference line exactly" test).
-If `REFPOINT_U`, `REFPOINT_U_FRACTION`, `REFPOINT_V`, or
-`REFPOINT_V_FRACTION` is set to ANY value at all, this function `error`s
-rather than silently pinning the wrong point — following the
-"fail loudly instead of silently corrupting geometry"
-philosophy (also used for missing long-section channels and incomplete
-endpoint anchors). Relatedly, `REFPOINT_U_OFFSET`/
-`REFPOINT_V_OFFSET` are only ever meaningful alongside their `_FRACTION`
-sibling in the C reference (`crgMgr.c:846,865`, read only from inside the
-`UFrac`/`VFrac` branches); since that whole path now always errors, they
-are simply inert here, and setting either one ALONE (without its
-`_FRACTION` sibling) correctly falls through to `REFLINE_OFFSET_*`/
-`REFLINE_ROTCENTER_*` instead of wrongly taking the `REFPOINT_*` branch — a
-real, silent, cross-validated bug in the first cut of this function (see
-`test_transform.jl`'s regression test for this exact scenario).
-
-`REFPOINT_Z`'s target elevation, like `REFPOINT_X`/`REFPOINT_Y`, is applied
-even when it isn't itself set (defaulting to `0.0`, mirroring
-`crgDataApplyTransformations`'s zero-initialized `toXYZ[2]`) — so setting
-only `REFPOINT_X`/`REFPOINT_Y`/`REFPOINT_PHI` still shifts the reference
-line's elevation profile so the anchor's elevation becomes `0.0`, unless
-`REFPOINT_Z` says otherwise. The anchor's CURRENT elevation (`from_z`) is
-NOT just `z_ref[1]` (the reference-line elevation channel alone) —
-cross-validating a `REFPOINT_Z`-only scenario against the real C oracle
-(`test_transform.jl`'s `"REFPOINT_Z"` testset, using `belgian_block.crg`,
-whose z-grid has a real ~2.13m nonzero value at `(start_u, v=0)`) showed
-`from_z` must fold in the z-grid's own value at `v = 0` too, i.e.
-`from_z = z_ref[1] + z_grid[1, v0_idx]`, matching `crgDataEvaluv2z`'s full
-surface evaluation (grid + reference elevation + banking, the last of which
-vanishes at `v=0`) rather than the reference-elevation-only value. This
-requires an EXACT `v = 0` entry in the (possibly `SCALE_WIDTH`-adjusted)
-`v` axis to look up without interpolating; if none exists, this function
-`error`s rather than approximating (same philosophy as the
-`REFPOINT_U*`/`REFPOINT_V*` error above).
-
-**`SCALE_LENGTH` also rescales `end_u` proportionally about `start_u`, not just
-`increment`** — matching `crgDataSetModifiersApply`'s explicit
-`channelU.info.last = channelU.info.first + dValue * uRange` (`crgMgr.c`
-~lines 548-558), where `uRange` is the ORIGINAL (pre-scale) `end_u - start_u`,
-and `channelU.info.first` (`start_u`) is left untouched. An earlier version of this function
-scaled
-`u_increment` correctly but threaded `r.end_u` straight through to `r2`/`r3`
-completely unchanged. `road_surface_grid`'s own u-axis (`u = [start_u +
-(i-1)*increment for i in 1:nu]`) only ever reads `start_u`/`increment`, never
-`end_u` — so this had (and, now fixed, still has) zero effect on any grid
-this package actually produces. But `end_u` IS part of the public
-`ReferenceLineParams`/`CRGData` struct a caller can read directly, so leaving
-it stale after a length rescale was a real correctness bug regardless of
-downstream reachability — cross-validated directly against the compiled C
-oracle's own post-scale `crgDataSetGetURange` output (not just hand
-arithmetic) in `test_transform.jl`'s `"SCALE_LENGTH"` regression test.
-
-**Scaling invalidates end anchors**, as in `crgDataSetModifiersApply`:
-`SCALE_LENGTH` and `SCALE_CURVATURE` drop `end_x`/`end_y` (set to `nothing`),
-`SCALE_LENGTH` and `SCALE_SLOPE` drop `end_z`, and `SCALE_BANKING` drops
-`end_banking`. Otherwise the scaled reference line would be integrated
-backward to a now-meaningless endpoint. Cross-validated in
-`test_oracle_scale_anchors.jl`.
-
-Deliberately NOT touched by any other `SCALE_*` here: `v` only moves under
-`SCALE_WIDTH`, and only by a uniform multiplicative factor — this preserves
-(assuming a positive scale factor, the only physically sensible one for a
-road width) the invariant `assemble_z_grid` depends on, that `v`
-stays sorted ascending and still lines up 1:1 with `z`'s columns (`sortperm`
-guarantees relative order, which scaling by a positive
-constant can't disturb). See `test_transform.jl`'s
-`"SCALE_WIDTH preserves the v-ascending / z-column invariant..."` regression
-test.
-
-Deliberately NOT applied: `mods.grid_nan_mode`/`mods.grid_nan_offset` (real
-behavior in `crgMgr.c` around line 601) control how NaN gaps
-in the z-grid get filled/replaced — a data-cleaning concern, not the
-scale/offset/rotate geometry transform supported here. Same deferral
-treatment as `\$ROAD_CRG_MPRO` — parsed and available on `RoadCrgMods`, never auto-applied.
+Return a copy of `data` with its `\$ROAD_CRG_MODS` scale and offset modifiers applied.
+Throws an error for the unsupported `REFPOINT_*` cases listed in [`road_surface_grid`](@ref).
 """
 function apply_mods(data::CRGData)
     mods = data.mods
@@ -544,10 +276,17 @@ end
 """
     road_surface_grid(data::CRGData) -> (u, v, X, Y, Z)
 
-The batched forward transform: applies `\$ROAD_CRG_MODS` (a no-op if none
-are set), integrates the reference line and its elevation profile, and
-offsets the whole grid laterally — producing world-frame `(u, v, X, Y, Z)`,
-all `(nu, nv)` except the `u`/`v` axis vectors themselves.
+Apply `data`'s `\$ROAD_CRG_MODS` and compute world-frame grids of the road surface.
+`u` (along the reference line) and `v` (positive left) are axis vectors in m;
+`X`, `Y`, `Z` are `(length(u), length(v))` matrices.
+
+Throws an error for unsupported modifiers (`REFPOINT_U*`/`REFPOINT_V*`, or
+`REFPOINT_*` without an exact `v = 0` column) or if only one of
+`REFERENCE_LINE_END_X`/`_END_Y` is set.
+
+```julia
+u, v, X, Y, Z = road_surface_grid(read_crg("road.crg"))
+```
 """
 function road_surface_grid(data::CRGData)
     d = apply_mods(data)

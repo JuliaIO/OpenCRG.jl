@@ -1,19 +1,10 @@
 """
     LibOpenCRG.C
 
-Low-level, one-to-one `ccall` bindings to the upstream ASAM OpenCRG C
-reference implementation ("baselib"), via `OpenCRG_jll`. Most users want the
-high-level interface in the parent module [`LibOpenCRG`](@ref) instead.
-
-Resource management is entirely manual at this level: every data set id from
-`crgLoaderReadFile` must be released with `crgDataSetRelease` and every
-contact point from `crgContactPointCreate` with `crgContactPointDelete`.
-The C library keeps global state and is not thread-safe.
-
-Function names and signatures mirror `crgBaseLib.h` (asam-ev/OpenCRG v2.0.1) exactly. Where
-the C function has pointer "out" parameters, the Julia wrapper allocates the
-`Ref` internally and returns a `NamedTuple` of `(status, <outputs...>)`
-instead of requiring the caller to pass in `Ref`s.
+One-to-one `ccall` bindings to the OpenCRG C library (`crgBaseLib.h`, v2.0.1).
+Out-parameters are returned as a `NamedTuple` `(status, outputs...)`.
+Resources are manual: release data sets with `crgDataSetRelease` and contact
+points with `crgContactPointDelete`. Not thread-safe.
 """
 module C
 
@@ -426,23 +417,9 @@ end
 """
     crgDataSetModifiersApply(dataSetId) -> Nothing
 
-Apply all currently-set modifiers to the data set. Modifiers are **not**
-cleared afterward (verified empirically: calling
-this twice in a row on the same data set with no intervening
-`crgDataSetModifierRemoveAll` applies the same offset twice) -- call
-`crgDataSetModifierRemoveAll` first if you need a clean slate before the
-next `...Apply` call, e.g. when reusing a `dataSetId` across multiple
-modifier scenarios.
-
-Also note: a freshly-created data set (`crgLoaderReadFile`) already has
-`dCrgModRefPointX/Y/Z/Phi` and `dCrgModGridNaNMode` seeded with default
-values (`crgOptionSetDefaultModifiers`, called automatically on data-set
-creation). Critically, `crgDataApplyTransformations` checks whether ANY
-`dCrgModRefPoint*` entry is present at all (regardless of its value) BEFORE
-checking `dCrgModRefLineOffset*` -- so these seeded defaults silently
-short-circuit `dCrgModRefLineOffsetX/Y/Z/Phi` modifiers entirely unless
-cleared first. Call `crgDataSetModifierRemoveAll(dataSetId)` immediately
-after loading, before setting any `RefLineOffset*` modifiers.
+Apply all currently set modifiers. They are not cleared afterwards. New data
+sets come with default `dCrgModRefPoint*` modifiers that override any
+`dCrgModRefLineOffset*`, so call `crgDataSetModifierRemoveAll` first.
 """
 function crgDataSetModifiersApply(dataSetId::Integer)
     ccall((:crgDataSetModifiersApply, libOpenCRG), Cvoid, (Cint,), dataSetId)

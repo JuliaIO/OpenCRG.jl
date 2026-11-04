@@ -9,14 +9,8 @@ license = "MIT"
 OpenCRG_jll = "12106939-feb0-55e0-8803-bffcfe01a5d0"
 
 [compat]
-Aqua = "0.8"
 OpenCRG_jll = "2.0.1"
-Test = "1"
 julia = "1.10"
 
-[extras]
-Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[targets]
-test = ["Aqua", "Test"]
+[workspace]
+projects = ["test"]

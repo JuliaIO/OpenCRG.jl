@@ -19,7 +19,7 @@ using Pkg
 Pkg.add(url="https://github.com/JuliaIO/OpenCRG.jl")
 ```
 
-Once registered, `Pkg.add("OpenCRG")` will work.
+The quick start below also needs `Pkg.add("DataInterpolations")`.
 
 ## Main function
 
@@ -38,7 +38,7 @@ Load a fixture and interpolate the centre-line elevation with
 ```julia
 using OpenCRG, DataInterpolations
 
-data = read_crg("test/data/handmade_curved_banked_sloped.crg")
+data = read_crg(joinpath(pkgdir(OpenCRG), "test", "data", "handmade_curved_banked_sloped.crg"))
 u, v, X, Y, Z = road_surface_grid(data)
 
 j = findfirst(==(0.0), v)           # centre-line column

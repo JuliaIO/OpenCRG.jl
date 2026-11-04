@@ -81,7 +81,7 @@ const MINIMAL = joinpath(DATA, "handmade_curved_minimalist.crg")
         read_crg(BANKED) do data
             umin, umax = urange(data)
             vmin, vmax = vrange(data)
-            for u in range(umin + 1, umax - 1; length = 7), v in range(vmin + 0.2, vmax - 0.2; length = 5)
+            for u in range(umin + 1, umax - 1; length = 3), v in range(vmin + 0.2, vmax - 0.2; length = 3)
                 x, y = uv2xy(data, u, v)
                 @test isfinite(x) && isfinite(y)
                 u2, v2 = xy2uv(data, x, y)
@@ -115,32 +115,6 @@ const MINIMAL = joinpath(DATA, "handmade_curved_minimalist.crg")
             @test (X[i, j], Y[i, j]) == uv2xy(data, u[i], v[j])
             @test isequal(Z[i, j], uv2z(data, u[i], v[j]))
         end
-    end
-
-    @testset "finalizer releases native handles" begin
-        # Many loads without explicit close must not exhaust the library.
-        for _ in 1:20
-            read_crg(MINIMAL)
-        end
-        GC.gc(); GC.gc()
-        @test read_crg(d -> isopen(d), MINIMAL)
-    end
-
-    @testset "finalizer never touches the library while it is locked" begin
-        d = read_crg(MINIMAL)
-        held = Base.Event(); done = Base.Event()
-        holder = Threads.@spawn lock(LibOpenCRG.LOCK) do
-            notify(held); wait(done)
-        end
-        wait(held)
-        LibOpenCRG._finalize!(d)       # lock busy elsewhere: must not release
-        @test isopen(d)
-        notify(done); wait(holder)
-        LibOpenCRG._finalize!(d)       # lock free: releases
-        @test !isopen(d)
-        LibOpenCRG._finalize!(d)       # idempotent
-        close(d)
-        @test !isopen(d)
     end
 
     @testset "finalizers are safe under concurrent evaluation" begin

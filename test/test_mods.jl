@@ -1,72 +1,53 @@
 using Test, OpenCRG
+include("helpers/fixtures.jl")
 
-@testset "\$ROAD_CRG_MODS parsing" begin
-    lines = [
-        "SCALE_Z_GRID = 2.0",
-        "REFLINE_OFFSET_PHI = 1.57",
-        "REFLINE_OFFSET_X = 100.0",
-        "REFPOINT_PHI = 0.0",   # presence alone should flip has_refpoint on, even though it's 0.0
-    ]
-    m = OpenCRG.parse_road_crg_mods(lines)
-    @test m.scale_z_grid == 2.0
-    @test m.scale_slope === nothing
-    @test m.refline_offset_phi == 1.57
-    @test m.refline_offset_x == 100.0
-    @test m.refpoint_phi == 0.0
+# Modifiers from a file's $ROAD_CRG_MODS section, observed through
+# road_surface_grid. test_crossvalidate.jl checks the same modifiers
+# against the C reference.
 
-    empty_mods = OpenCRG.parse_road_crg_mods(String[])
-    @test empty_mods.scale_z_grid === nothing
-    @test empty_mods.refpoint_phi === nothing
+surface(name, mods::Pair...) = road_surface_grid(read_crg(with_mods(name, mods...)))
 
-    @testset "every RoadCrgMods field round-trips through its own header key" begin
-        # NOTE: unrolled into one @test per field (rather than looping over
-        # field_to_key and calling `getfield(m, field) == sentinel`) because the
-        # looped form's failure output doesn't name the offending field: Julia's
-        # @test only decomposes the top-level `==` call, printing e.g.
-        # "Evaluated: nothing == 12345.6789" without revealing what `field` was.
-        # Writing out `m.<field> == sentinel` per field makes the failing
-        # expression itself name the field, so a typo'd key is immediately
-        # attributable to one line.
-        field_to_key = Dict(
-            :scale_z_grid => "SCALE_Z_GRID", :scale_slope => "SCALE_SLOPE", :scale_banking => "SCALE_BANKING",
-            :scale_length => "SCALE_LENGTH", :scale_width => "SCALE_WIDTH", :scale_curvature => "SCALE_CURVATURE",
-            :grid_nan_offset => "GRID_NAN_OFFSET",
-            :refpoint_u => "REFPOINT_U", :refpoint_u_fraction => "REFPOINT_U_FRACTION", :refpoint_u_offset => "REFPOINT_U_OFFSET",
-            :refpoint_v => "REFPOINT_V", :refpoint_v_fraction => "REFPOINT_V_FRACTION", :refpoint_v_offset => "REFPOINT_V_OFFSET",
-            :refpoint_x => "REFPOINT_X", :refpoint_y => "REFPOINT_Y", :refpoint_z => "REFPOINT_Z", :refpoint_phi => "REFPOINT_PHI",
-            :refline_rotcenter_x => "REFLINE_ROTCENTER_X", :refline_rotcenter_y => "REFLINE_ROTCENTER_Y",
-            :refline_offset_x => "REFLINE_OFFSET_X", :refline_offset_y => "REFLINE_OFFSET_Y",
-            :refline_offset_z => "REFLINE_OFFSET_Z", :refline_offset_phi => "REFLINE_OFFSET_PHI",
-        )
-        sentinel = 12345.6789
-        lines = ["$(key) = $(sentinel)" for key in values(field_to_key)]
-        m = OpenCRG.parse_road_crg_mods(lines)
-        @test m.scale_z_grid == sentinel
-        @test m.scale_slope == sentinel
-        @test m.scale_banking == sentinel
-        @test m.scale_length == sentinel
-        @test m.scale_width == sentinel
-        @test m.scale_curvature == sentinel
-        @test m.grid_nan_offset == sentinel
-        @test m.refpoint_u == sentinel
-        @test m.refpoint_u_fraction == sentinel
-        @test m.refpoint_u_offset == sentinel
-        @test m.refpoint_v == sentinel
-        @test m.refpoint_v_fraction == sentinel
-        @test m.refpoint_v_offset == sentinel
-        @test m.refpoint_x == sentinel
-        @test m.refpoint_y == sentinel
-        @test m.refpoint_z == sentinel
-        @test m.refpoint_phi == sentinel
-        @test m.refline_rotcenter_x == sentinel
-        @test m.refline_rotcenter_y == sentinel
-        @test m.refline_offset_x == sentinel
-        @test m.refline_offset_y == sentinel
-        @test m.refline_offset_z == sentinel
-        @test m.refline_offset_phi == sentinel
+@testset "no modifiers section is a no-op" begin
+    name = "handmade_curved_banked_sloped.crg"
+    @test isequal(road_surface_grid(read_crg(fixture(name))), surface(name))
+end
 
-        # grid_nan_mode is Int-typed, not Float64 -- test separately with an integral value
-        m2 = OpenCRG.parse_road_crg_mods(["GRID_NAN_MODE = 3"])
-        @test m2.grid_nan_mode == 3
+@testset "REFPOINT_X/Y/PHI/Z place the road start" begin
+    u, v, X, Y, Z = surface("belgian_block.crg", "REFPOINT_X" => 10.0, "REFPOINT_Y" => 20.0,
+                            "REFPOINT_PHI" => 0.5, "REFPOINT_Z" => 42.0)
+    j = findfirst(==(0.0), v)
+    @test X[1, j] ≈ 10.0
+    @test Y[1, j] ≈ 20.0
+    @test atan(Y[2, j] - Y[1, j], X[2, j] - X[1, j]) ≈ 0.5 atol = 1e-3
+    @test Z[1, j] ≈ 42.0
+
+    # Any REFPOINT_* without REFPOINT_Z moves the start elevation to 0.
+    u, v, X, Y, Z = surface("belgian_block.crg", "REFPOINT_X" => 10.0)
+    @test Z[1, j] ≈ 0.0 atol = 1e-6
+end
+
+@testset "scaling" begin
+    name = "handmade_curved_banked_sloped.crg"
+    u0, v0, X0, Y0, Z0 = road_surface_grid(read_crg(fixture(name)))
+
+    u, v, X, Y, Z = surface(name, "SCALE_LENGTH" => 1.5)
+    @test u ≈ 1.5 .* u0
+    @test last(u) ≈ 33.0
+
+    u, v, X, Y, Z = surface(name, "SCALE_WIDTH" => 2.0)
+    @test v ≈ 2.0 .* v0
+    @test X[:, 4] ≈ X0[:, 4] && Y[:, 4] ≈ Y0[:, 4]   # centre line unchanged
+
+    _, _, _, _, Z0 = road_surface_grid(read_crg(fixture("handmade_curved_minimalist.crg")))
+    _, _, _, _, Z = surface("handmade_curved_minimalist.crg", "SCALE_Z_GRID" => 2.0)
+    @test Z ≈ 2.0 .* Z0
+end
+
+@testset "errors" begin
+    # Selecting the reference point by (u, v) is not supported.
+    for key in ("REFPOINT_U", "REFPOINT_U_FRACTION", "REFPOINT_V", "REFPOINT_V_FRACTION")
+        @test_throws Exception surface("handmade_curved_minimalist.crg", key => 0.5)
     end
+    # REFPOINT_* needs a long section exactly at v = 0.
+    @test_throws Exception surface("synthetic_hairpin.crg", "REFPOINT_X" => 5.0)
 end

@@ -1,111 +1,76 @@
 using Test, OpenCRG
-const DATA = joinpath(@__DIR__, "data")
-include("helpers/LibOpenCRG.jl")
+include("helpers/fixtures.jl")
+include("helpers/oracle.jl")
 
-using .LibOpenCRG
+# Every node of `road_surface_grid` must agree with the C reference
+# implementation (OpenCRG_jll) evaluated at the same (u, v).
 
-"""
-    crossvalidate_grid(path; label=path) -> Int
-
-Load `path` through both this package's `read_crg`/`road_surface_grid` and
-the real compiled C oracle (`LibOpenCRG`), then compare the resulting
-world-frame grids node-by-node. Returns the number of mismatching nodes
-(deliberately NOT a per-node `@test` inside the double loop -- with a real
-file's full grid, a systematic bug would otherwise produce hundreds of
-near-identical failure messages that bury the actual pattern; the caller
-wraps the returned count in a single `@test mismatches == 0`. If that ever
-fails, the fix is to drop a `@show i, j, X[i,j], ref_xy.x, Y[i,j], ref_xy.y`
-right before the mismatch-counting `if` below to see exactly where and how
-it diverges -- not to guess.
-"""
-function crossvalidate_grid(path::AbstractString)
-    data = OpenCRG.read_crg(path)
-    u, v, X, Y, Z = OpenCRG.road_surface_grid(data)
-    @test size(X) == (length(u), length(v))
-    @test size(Y) == size(X)
-    @test size(Z) == size(X)
-
-    dsId = crgLoaderReadFile(path)
-    @test dsId != 0
-    @test crgCheck(dsId) != 0
-    cpId = crgContactPointCreate(dsId)
-    @test cpId != -1
-
-    mismatches = 0
-    for i in eachindex(u), j in eachindex(v)
-        ref_xy = crgEvaluv2xy(cpId, u[i], v[j])
-        if ref_xy.status != 0
-            # NOTE: `≈ ... atol=...` is `@test`-macro sugar, not general Julia
-            # syntax -- `!(a ≈ b atol=c)` is a ParseError ("extra tokens after
-            # end of expression") when written outside of `@test` (confirmed by
-            # direct experiment while implementing this task; the plan's
-            # original draft of this loop used the infix form here and would
-            # not even parse). `isapprox(a, b; atol=c)` is an ordinary function
-            # call and nests inside `!(...)` fine.
-            if !isapprox(X[i,j], ref_xy.x; atol=1e-6) || !isapprox(Y[i,j], ref_xy.y; atol=1e-6)
-                mismatches += 1
-            end
-        end
-        ref_z = crgEvaluv2z(cpId, u[i], v[j])
-        if ref_z.status != 0 && !isnan(ref_z.z) && !isnan(Z[i,j])
-            if !isapprox(Z[i,j], ref_z.z; atol=1e-6)
-                mismatches += 1
-            end
+@testset "sample files" begin
+    for name in ["handmade_curved_minimalist.crg", "handmade_curved_banked_sloped.crg",
+                 "synthetic_end_anchored_2col.crg", "synthetic_hairpin.crg", "belgian_block.crg"]
+        @testset "$name" begin
+            compared, mismatches = oracle_mismatches(fixture(name))
+            @test compared > 0
+            @test mismatches == 0
         end
     end
-
-    crgContactPointDelete(cpId)
-    crgDataSetRelease(dsId)
-    crgMemRelease()
-    return mismatches
 end
 
-@testset "road_surface_grid, cross-validated against the LibOpenCRG oracle" begin
-    # The plan's original fixture list here was just the first two files below
-    # -- neither exercises the end-anchored/backward-integration branches of
-    # integrate_reference_line/integrate_reference_z (Task 12's review note),
-    # and neither exercises lateral_offset_grid's hairpin degeneracy (Task 13's
-    # review note). Both gaps are closed by the two synthetic fixtures added
-    # below, each independently confirmed to actually load in the real C
-    # library (`crgLoaderReadFile` returns a nonzero dsId AND `crgCheck`
-    # returns nonzero -- both asserted inside `crossvalidate_grid` above,
-    # not just assumed) before any cross-validation result from them is
-    # trusted:
-    #
-    #   - synthetic_end_anchored_2col.crg: like Task 11's synthetic_end_anchored.crg
-    #     (end-anchored x/y AND z, non-constant/non-monotonic phi and slope),
-    #     but with 3 long-section columns instead of 1 -- the real C library
-    #     rejects any file with fewer than 2 (`crgLoader.c`: "no or insufficient
-    #     long section data available", checkHeaderConsistency). Cross-validating
-    #     this fixture is what actually caught a real, systematic bug in
-    #     integrate_reference_z's end-anchored blend (see its docstring in
-    #     transform.jl and the updated Task 12 test in test_transform.jl) --
-    #     without a >=2-column end-anchored-z fixture, that branch was cross-
-    #     validated only against this package's own hand arithmetic, which
-    #     reproduced the same (wrong) assumption the implementation made.
-    #
-    #   - synthetic_hairpin.crg: an exact 180-degree hairpin (equal-length
-    #     segments meeting head-on), binary/KDBI so its phi channel encodes
-    #     exact `Float64(pi)` with no ASCII-decimal truncation (a first attempt
-    #     at this fixture using 7-decimal ASCII/LRFI truncated pi by ~4.6e-8
-    #     rad, which turned out to be nowhere near small enough to trigger the
-    #     C library's 1.0e-10 epsilon guards -- confirmed by hand before
-    #     switching to binary). Cross-validating this fixture confirmed the C
-    #     oracle does NOT produce NaN at a hairpin -- it gracefully collapses
-    #     to the reference line's own point -- which is what motivated porting
-    #     the epsilon guards into lateral_offset_grid (see its docstring) and
-    #     updating Task 13's pinning test accordingly.
-    #
-    #   - belgian_block.crg: the only large, real-world, Float32-binary
-    #     fixture in this test suite -- found during the Tasks 16+17 review
-    #     to already cross-validate cleanly (0 mismatches) but to have been
-    #     missing from this loop the whole time. Added here (unrelated to
-    #     the REFPOINT_* fix that's the rest of this change, but cheap to
-    #     include in the same pass).
-    for fname in ["handmade_curved_minimalist.crg", "handmade_curved_banked_sloped.crg",
-                  "synthetic_end_anchored_2col.crg", "synthetic_hairpin.crg", "belgian_block.crg"]
-        @testset "$fname" begin
-            mismatches = crossvalidate_grid(joinpath(DATA, fname))
+@testset "\$ROAD_CRG_MODS" begin
+    L = LibOpenCRG
+    # The Julia side reads the modifiers from a `$ROAD_CRG_MODS` section in the
+    # file; the C side gets the same modifiers through its API.
+    # (file, [header key => (C modifier id, value)])
+    cases = [
+        "handmade_curved_minimalist.crg" => ["REFLINE_OFFSET_PHI" => (L.dCrgModRefLineOffsetPhi, 1.57),
+                                             "REFLINE_OFFSET_X" => (L.dCrgModRefLineOffsetX, 100.0),
+                                             "REFLINE_OFFSET_Y" => (L.dCrgModRefLineOffsetY, 50.0)],
+        # REFPOINT_* takes precedence over REFLINE_OFFSET_*/REFLINE_ROTCENTER_*
+        "handmade_curved_minimalist.crg" => ["REFPOINT_X" => (L.dCrgModRefPointX, 10.0),
+                                             "REFPOINT_Y" => (L.dCrgModRefPointY, 20.0),
+                                             "REFPOINT_PHI" => (L.dCrgModRefPointPhi, 0.5),
+                                             "REFLINE_OFFSET_X" => (L.dCrgModRefLineOffsetX, 999.0),
+                                             "REFLINE_OFFSET_Y" => (L.dCrgModRefLineOffsetY, -999.0),
+                                             "REFLINE_OFFSET_PHI" => (L.dCrgModRefLineOffsetPhi, 3.0),
+                                             "REFLINE_ROTCENTER_X" => (L.dCrgModRefLineRotCenterX, -500.0),
+                                             "REFLINE_ROTCENTER_Y" => (L.dCrgModRefLineRotCenterY, 500.0)],
+        # REFPOINT_U_OFFSET/V_OFFSET alone do not select a reference point
+        "handmade_curved_minimalist.crg" => ["REFPOINT_U_OFFSET" => (L.dCrgModRefPointUOffset, 5.0),
+                                             "REFPOINT_V_OFFSET" => (L.dCrgModRefPointVOffset, 0.3),
+                                             "REFLINE_OFFSET_X" => (L.dCrgModRefLineOffsetX, 100.0)],
+        "belgian_block.crg" => ["REFPOINT_Z" => (L.dCrgModRefPointZ, 42.0)],
+        "belgian_block.crg" => ["SCALE_Z_GRID" => (L.dCrgModScaleZ, 3.0),
+                                "REFPOINT_Z" => (L.dCrgModRefPointZ, 42.0)],
+        "belgian_block.crg" => ["REFPOINT_X" => (L.dCrgModRefPointX, 10.0)],
+        "handmade_curved_banked_sloped.crg" => ["SCALE_Z_GRID" => (L.dCrgModScaleZ, 2.0)],
+        "handmade_curved_banked_sloped.crg" => ["SCALE_WIDTH" => (L.dCrgModScaleWidth, 2.0)],
+        "handmade_curved_banked_sloped.crg" => ["SCALE_LENGTH" => (L.dCrgModScaleLength, 1.5)],
+        "handmade_curved_banked_sloped.crg" => ["SCALE_CURVATURE" => (L.dCrgModScaleCurvature, 1.5)],
+        "handmade_curved_banked_sloped.crg" => ["SCALE_SLOPE" => (L.dCrgModScaleSlope, 2.0)],
+        "handmade_curved_banked_sloped.crg" => ["SCALE_BANKING" => (L.dCrgModScaleBank, 2.0)],
+        # Scaling length, curvature or slope invalidates the end anchors in the header.
+        "synthetic_end_anchored_2col.crg" => ["SCALE_LENGTH" => (L.dCrgModScaleLength, 2.0)],
+        "synthetic_end_anchored_2col.crg" => ["SCALE_CURVATURE" => (L.dCrgModScaleCurvature, 3.0)],
+        "synthetic_end_anchored_2col.crg" => ["SCALE_SLOPE" => (L.dCrgModScaleSlope, 2.0)],
+        "synthetic_end_anchored_2col.crg" => ["SCALE_LENGTH" => (L.dCrgModScaleLength, 0.5),
+                                              "SCALE_SLOPE" => (L.dCrgModScaleSlope, 1.5)],
+        "synthetic_end_anchored_2col.crg" => ["SCALE_LENGTH" => (L.dCrgModScaleLength, 2.0),
+                                              "REFPOINT_X" => (L.dCrgModRefPointX, 5.0),
+                                              "REFPOINT_Y" => (L.dCrgModRefPointY, -3.0)],
+        "synthetic_end_anchored_2col.crg" => ["SCALE_CURVATURE" => (L.dCrgModScaleCurvature, 2.0),
+                                              "REFLINE_OFFSET_PHI" => (L.dCrgModRefLineOffsetPhi, 0.3),
+                                              "REFLINE_OFFSET_X" => (L.dCrgModRefLineOffsetX, 1.0),
+                                              "REFLINE_OFFSET_Z" => (L.dCrgModRefLineOffsetZ, 0.2)],
+    ]
+    for (name, mods) in cases
+        label = name * ": " * join(first.(mods), ", ")
+        @testset "$label" begin
+            path = with_mods(name, (k => last(m) for (k, m) in mods)...)
+            # Sample the large belgian_block grid instead of evaluating every node.
+            big = name == "belgian_block.crg"
+            compared, mismatches = oracle_mismatches(path, fixture(name); c_mods = last.(mods),
+                                                     rows = big ? (1:50:1001) : (:), cols = big ? (1:17:341) : (:))
+            @test compared > 0
             @test mismatches == 0
         end
     end

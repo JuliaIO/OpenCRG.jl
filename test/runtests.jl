@@ -13,6 +13,7 @@ include("helpers/LibOpenCRG.jl")
     include("test_read.jl")
     include("test_transform.jl")
     include("test_aqua.jl")
+    include("test_quality.jl")
 
     # Cross-validation against the upstream C reference implementation
     # (OpenCRG_jll), through a small ccall wrapper kept in test/helpers.

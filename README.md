@@ -12,8 +12,6 @@ addressed in a road-aligned `(u, v)` frame (`u` along the line, `v` across it).
 
 ## Installation
 
-OpenCRG.jl is not yet in the General registry:
-
 ```julia
 using Pkg
 Pkg.add("OpenCRG")

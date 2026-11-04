@@ -20,3 +20,9 @@ include("helpers/LibOpenCRG.jl")
     include("test_oracle_scale_anchors.jl")
     include("test_crossvalidate.jl")
 end
+
+if VERSION >= v"1.12"
+    trim_project = joinpath(@__DIR__, "trim")
+    run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$trim_project -e 'using Pkg; Pkg.instantiate()'`, "JULIA_LOAD_PATH" => "@:@stdlib"))
+    run(addenv(`$(Base.julia_cmd()) --startup-file=no --project=$trim_project $(joinpath(trim_project, "runtests.jl"))`, "JULIA_LOAD_PATH" => "@:@stdlib"))
+end

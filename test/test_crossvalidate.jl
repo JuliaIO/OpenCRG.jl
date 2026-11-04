@@ -1,3 +1,7 @@
+using Test, OpenCRG
+const DATA = joinpath(@__DIR__, "data")
+include("helpers/LibOpenCRG.jl")
+
 using .LibOpenCRG
 
 """

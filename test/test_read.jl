@@ -1,4 +1,24 @@
+using Test, OpenCRG
+const DATA = joinpath(@__DIR__, "data")
+
 @testset "read_crg" begin
+    @testset "unknown format code uses the CRG format error" begin
+        mktemp() do path, io
+            fixture = read(joinpath(DATA, "handmade_curved_minimalist.crg"), String)
+            write(io, replace(fixture, "#:LRFI" => "#:UNKNOWN"))
+            close(io)
+            err = try
+                read_crg(path)
+                nothing
+            catch e
+                e
+            end
+            @test err isa OpenCRG.UnrecognizedFormatError
+            @test err.format_code === :UNKNOWN
+            @test sprint(showerror, err) == "unrecognized CRG data format code: UNKNOWN"
+        end
+    end
+
     @testset "small ASCII file end-to-end" begin
         data = OpenCRG.read_crg(joinpath(DATA, "handmade_curved_minimalist.crg"))
         @test data isa OpenCRG.CRGData
@@ -36,5 +56,18 @@
         finally
             rm(path)
         end
+    end
+end
+
+@testset "comment display" begin
+    fixture = read_crg(joinpath(DATA, "belgian_block.crg"))
+    @test occursin('\n', fixture.comment)
+    displayed = sprint(show, MIME("text/plain"), fixture)
+    @test occursin("Comment: \"% See the NOTICE", displayed)
+    @test !occursin("***", displayed)
+    for (text, width, expected) in (("% ***\n -- == \n  Road description\nSecond line", 80, "\"Road description\""),
+                             ("% *-= \n\n", 80, "\"\""),
+                             ("\n  αβγδε\nother", 3, "\"αβγ…\""))
+        @test sprint(io -> OpenCRG._show_comment(io, text, width)) == expected
     end
 end

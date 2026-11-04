@@ -1,3 +1,7 @@
+using Test, OpenCRG
+const DATA = joinpath(@__DIR__, "data")
+include("helpers/LibOpenCRG.jl")
+
 # Cross-validation against the upstream C reference implementation (OpenCRG_jll).
 
 using .LibOpenCRG

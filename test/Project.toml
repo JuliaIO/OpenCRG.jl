@@ -1,0 +1,22 @@
+[deps]
+JuliaC = "acedd4c2-ced6-4a15-accc-2607eb759ba2"
+SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
+OpenCRG = "40a2bf50-15af-408a-8ff9-1cb7955b13ad"
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+ExplicitImports = "7d51a73a-1435-4ff3-83d9-f097790105c7"
+OpenCRG_jll = "12106939-feb0-55e0-8803-bffcfe01a5d0"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+JuliaC = "0.3.8"
+SafeTestsets = "0.1"
+# OpenCRG is the package under test, resolved via [sources] (path dep); an
+# unbounded range keeps CompatHelper from proposing a self-compat entry.
+OpenCRG = ">= 0"
+Aqua = "0.8"
+ExplicitImports = "1.10"
+OpenCRG_jll = "2.0.1"
+Test = "1"
+
+[sources]
+OpenCRG = {path = ".."}

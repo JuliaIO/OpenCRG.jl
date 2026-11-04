@@ -1,9 +1,12 @@
 
 """
-A fully parsed OpenCRG file: header metadata plus raw channels. No
-interpolation/evaluation lives here — see `transform.jl`'s
-`road_surface_grid` for the batched forward transform into world-frame
-grids.
+A fully parsed OpenCRG file holding all data from that file: header metadata
+(`refline`, `mods`, `opts`, `mpro`, `comment` and `format_code`), reference-line
+heading `phi`, optional `banking` and `slope` channels, the lateral axis `v`,
+and the raw elevation grid `z`.
+
+See [`road_surface_grid`](@ref) for the batched forward transform into
+world-frame grids. This object does not perform interpolation or evaluation.
 """
 struct CRGData
     comment::String
@@ -28,7 +31,7 @@ grid rows is never computed from `\$ROAD_CRG`'s `start_u`/`end_u`/
 "minimalist" file that only sets `REFERENCE_LINE_INCREMENT`) and are only
 descriptive/redundant metadata when present. The true row count comes from
 `decode_ascii_payload`/`decode_binary_payload`, which derive it directly
-from the payload's actual size (see Tasks 7-8).
+from the payload's actual size.
 
 Errors immediately, with a clear message, if no channels are declared at
 all (a missing or empty `\$KD_DEFINITION` -- the sign of a non-CRG file, or
@@ -43,7 +46,7 @@ function read_crg(path::AbstractString)
     payload = bytes[header_end:end]
     sections = group_sections(header_lines)
 
-    comment = join(get(sections, "CT", String[]), " ")
+    comment = join(get(sections, "CT", String[]), "\n")
     refline = parse_road_crg(get(sections, "ROAD_CRG", String[]))
     format_code, channels = parse_kd_definition(get(sections, "KD_DEFINITION", String[]))
     opts = parse_keyvalues(get(sections, "ROAD_CRG_OPTS", String[]))

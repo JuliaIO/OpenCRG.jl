@@ -1,3 +1,7 @@
+using Test, OpenCRG
+const DATA = joinpath(@__DIR__, "data")
+include("helpers/LibOpenCRG.jl")
+
 # Scaling modifiers invalidate the header's end anchors in the C reference
 # (crgDataSetModifiersApply clears X/Y end after SCALE_LENGTH/SCALE_CURVATURE and
 # Z end after SCALE_LENGTH/SCALE_SLOPE). Cross-validate against OpenCRG_jll on

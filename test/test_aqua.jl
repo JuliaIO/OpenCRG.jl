@@ -1,3 +1,5 @@
+using Test, OpenCRG
+
 using Aqua
 
 @testset "Aqua" begin

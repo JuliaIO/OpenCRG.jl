@@ -218,7 +218,7 @@ function parse_kd_definition(lines::Vector{String})
     for line in lines
         if startswith(line, "#:")
             code = uppercase(strip(line[3:end]))
-            haskey(CRG_FORMAT_CODES, code) || error("unknown CRG data format code: $code")
+            haskey(CRG_FORMAT_CODES, code) || throw(UnrecognizedFormatError(Symbol(code)))
             format_code = CRG_FORMAT_CODES[code]
         elseif startswith(line, "U:")
             continue
@@ -278,16 +278,16 @@ function v_axis(channels::Vector{ChannelDef}, refline::ReferenceLineParams)
             n == 1 && error("LONG_SECTION_V_INCREMENT required when there is only one long section (spacing can't be derived from a single point)")
             inc = (refline.v_left - refline.v_right) / (n - 1)
         end
-        return [refline.v_right + (c.index - 1) * inc for c in long_sections]
+        return Float64[refline.v_right + (c.index::Int - 1) * inc for c in long_sections]
     else
-        return [c.v for c in long_sections]
+        return Float64[c.v::Float64 for c in long_sections]
     end
 end
 
 """
 Every field from `\$ROAD_CRG_MODS`. All optional (`nothing` if absent from
 the file) — `nothing` here means "not present," which matters: e.g.
-`has_refpoint` in `apply_mods` (Task 16) checks presence of *any*
+`has_refpoint` in `apply_mods` checks presence of *any*
 `refpoint_*` field, not whether it's zero.
 """
 Base.@kwdef struct RoadCrgMods

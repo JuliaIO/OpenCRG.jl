@@ -1,5 +1,6 @@
 using Test
 using Aqua
+using ExplicitImports
 using LibOpenCRG
 
 # Sample files copied from the upstream asam-ev/OpenCRG project (Apache-2.0);
@@ -12,6 +13,19 @@ const MINIMAL = joinpath(DATA, "handmade_curved_minimalist.crg")
 @testset "LibOpenCRG" begin
     @testset "Aqua" begin
         Aqua.test_all(LibOpenCRG)
+    end
+
+    @testset "ExplicitImports" begin
+        @test check_no_implicit_imports(LibOpenCRG) === nothing
+        @test check_no_stale_explicit_imports(LibOpenCRG) === nothing
+    end
+
+    # JET results depend on the Julia version; only run on non-LTS releases.
+    if VERSION >= v"1.11"
+        @testset "JET" begin
+            @eval using JET
+            @invokelatest JET.test_package(LibOpenCRG; target_modules = (LibOpenCRG,))
+        end
     end
 
     @testset "C layer" begin

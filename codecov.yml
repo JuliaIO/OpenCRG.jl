@@ -1,0 +1,19 @@
+# Each package is tested in its own CI job and uploaded under its own flag.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+flag_management:
+  individual_flags:
+    - name: OpenCRG
+      paths:
+        - src/
+    - name: LibOpenCRG
+      paths:
+        - lib/LibOpenCRG.jl/src/
+comment:
+  layout: "condensed_header, diff, flags"

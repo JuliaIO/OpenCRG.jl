@@ -1,6 +1,6 @@
 name = "OpenCRG"
 uuid = "40a2bf50-15af-408a-8ff9-1cb7955b13ad"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Anshul Singhvi <anshulsinghvi@gmail.com>"]
 description = "A pure-Julia reader for the ASAM OpenCRG road data file format"
 license = "MIT"
